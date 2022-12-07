@@ -1,0 +1,142 @@
+CATEGORY_LEVEL_1_Generation_Mechanism,CATEGORY_LEVEL_2_Sector_Equipment,-2,-1,0,1,2,Reference
+Combustion,Mobile,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Aircraft,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Airport,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Marine,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Nonroad,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Nonroad; DPF,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Nonroad; Non-DPF,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad; DPF,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad; Heavy Duty,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad; Light Duty,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad; Light Duty; Medium Duty,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Onroad; Non-DPF,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Mobile; Rail,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Miscellaneous,Mobile,0.08,0.08,0.08,0.37,0.39,Lu et al 2020; Gasoline
+Combustion,Industrial,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Cupola,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Electric Arc Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Foundry,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Kiln,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Potline,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Roaster,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Sintering,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Smelter,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Smelter; Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Metal; Welding,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Mineral Products; Kiln,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Industrial; Wood Products,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Secondary Aluminum Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Smelting,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Stationary Engine,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Turbine,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Waste,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Waste Combustion,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Glass Plant,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Incinerator,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Melting Pot,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Mineral Products,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Mineral Products; Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Mineral Products; Kiln,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Petrochemical; Process Heater,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Process Heater,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Process Heater; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Process Heater; Gas Turbine,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Pulp And Paper,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Pulp And Paper; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Pulp And Paper; Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Pulp And Paper; Kiln,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Refinery; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Boiler; Process Heater; Engine,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Chemical Manufacturing,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Chemical Manufacturing; Calciner,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Chemical Manufacturing; Furnace,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Chemical Manufacturing; Kiln,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Chemical Reaction,Industrial; Metal,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Chemical Reaction,Petrochemical; Catalytic Cracker,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Domestic,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Electric Generation,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Electric Generation; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Electric Generation; Incinerator,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Residential,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Residential Heating,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Residential; Boiler,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Residential; Space Heater,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Residential; Space Heater And Water Heater,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Volatilization,Chemical Manufacturing,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Volatilization,Industrial; Metal,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Volatilization,Mineral Products,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Volatilization,Petrochemical,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Volatilization,Pulp And Paper,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Atomization,Surface Coating; Spraying,0.06,0.12,0.18,0.28,0.36,Robinson et al 2007; Renormalized to N2 - P2
+Combustion,Biomass Burning; Agriculture,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Prescribed Fire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Prescribed Fire; Slash,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Residential Wood Combustion; Fireplace,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Residential Wood Combustion; Fireplace; Woodstove,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Residential Wood Combustion; Outdoor Boiler,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Residential Wood Combustion; Woodstove,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Wildfire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Wildfire; Prescribed Fire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass burning; Wildfire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Open Burning; Refuse,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Crop Heating,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Cigarette,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Dust,Agriculture,1,0,0,0,0,Assume NV-POA
+Dust,Agriculture; Silo,1,0,0,0,0,Assume NV-POA
+Dust,Chemical Manufacturing,1,0,0,0,0,Assume NV-POA
+Dust,Construction,1,0,0,0,0,Assume NV-POA
+Dust,Desert,1,0,0,0,0,Assume NV-POA
+Dust,Food And Agriculture,1,0,0,0,0,Assume NV-POA
+Dust,Geological,1,0,0,0,0,Assume NV-POA
+Dust,Heat Treating,1,0,0,0,0,Assume NV-POA
+Dust,Industrial,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Construction; Sandblasting,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Metal,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Metal And Construction; Sandblasting,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Metal; Sandblasting,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Mining,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Shredding,1,0,0,0,0,Assume NV-POA
+Dust,Industrial; Wood Products,1,0,0,0,0,Assume NV-POA
+Dust,Landfill,1,0,0,0,0,Assume NV-POA
+Dust,Mineral Products,1,0,0,0,0,Assume NV-POA
+Dust,Mobile; Onroad,1,0,0,0,0,Assume NV-POA
+Dust,Petrochemical,1,0,0,0,0,Assume NV-POA
+Dust,Road,1,0,0,0,0,Assume NV-POA
+Dust,Sanding,1,0,0,0,0,Assume NV-POA
+Dust,Urban,1,0,0,0,0,Assume NV-POA
+Dust,Volcanic,1,0,0,0,0,Assume NV-POA
+Dust,Waste Combustion,1,0,0,0,0,Assume NV-POA
+Dust,Windblown,1,0,0,0,0,Assume NV-POA
+Ash,Combustion,1,0,0,0,0,Assume NV-POA
+Ash,Electric Generation; Boiler,1,0,0,0,0,Assume NV-POA
+Ash,Furnace,1,0,0,0,0,Assume NV-POA
+Ash,Industrial,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Boiler,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal; Baghouse,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal; Calciner,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal; Electric Arc Furnace,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal; Furnace; Sintering,1,0,0,0,0,Assume NV-POA
+Ash,Industrial; Metal; Sintering,1,0,0,0,0,Assume NV-POA
+Ash,Mineral Products,1,0,0,0,0,Assume NV-POA
+Ash,Volcanic,1,0,0,0,0,Assume NV-POA
+Ash,Waste Combustion,1,0,0,0,0,Assume NV-POA
+Background Air,Geothermal,1,0,0,0,0,Assume NV-POA
+Background Air,Industrial,1,0,0,0,0,Assume NV-POA
+Background Air,Non-industrial,1,0,0,0,0,Assume NV-POA
+Background Air,Regional,1,0,0,0,0,Assume NV-POA
+Miscellaneous,Miscellaneous,1,0,0,0,0,Assume NV-POA
+Miscellaneous,Waste,1,0,0,0,0,Assume NV-POA
+Combustion,Cooking,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
+Combustion,Cooking; Charbroiling,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
+Combustion,Cooking; Charbroiling; Stirfry; Smoke,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
+Combustion,Cooking; Frying,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
+Combustion,Cooking; Open Stove,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
+Combustion,Cooking; Stirfrying,0.21,0.01,0.01,0.7,0.07,Takhar et al 2019; Average
