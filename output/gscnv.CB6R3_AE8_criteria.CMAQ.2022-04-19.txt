@@ -1,0 +1,31 @@
+#SPTOOL_AQM          CMAQ
+#SPTOOL_CAMX_FCRS    Not Applicable
+#SPTOOL_MECH         CB6R3_AE8
+#SPTOOL_RUN_TYPE     CRITERIA
+#INPUT.POLL,OUTPUT.POLL,PROFILE,OUTPUT.MASS/INPUT.MASS
+VOC                  TOG                  95820                1.002314            
+VOC                  TOG                  2402                 1.033165            
+VOC                  TOG                  99001                1.299226            
+VOC                  TOG                  99002                1.059119            
+VOC                  TOG                  99003                2.41193             
+VOC                  TOG                  99004                2.131535            
+VOC                  TOG                  99005                1.059562            
+VOC                  TOG                  95811                1.146093            
+VOC                  TOG                  95826                1.013366            
+VOC                  TOG                  95822                1.023243            
+VOC                  TOG                  95828                1                   
+VOC                  TOG                  2422                 1.529286            
+VOC                  TOG                  95837                1                   
+VOC                  TOG                  95816                1.036193            
+VOC                  TOG                  3135                 1.070542            
+VOC                  TOG                  3149                 1.42112             
+VOC                  TOG                  3138                 1.566552            
+VOC                  TOG                  2405                 1.011225            
+VOC                  TOG                  3131                 1.487286            
+VOC                  TOG                  2414                 1.149161            
+VOC                  TOG                  2415                 1.093016            
+VOC                  TOG                  2406                 1.011941            
+VOC                  TOG                  2552                 1                   
+VOC                  TOG                  2411                 1                   
+VOC                  TOG                  2416                 1                   
+VOC                  TOG                  2408                 1                   
