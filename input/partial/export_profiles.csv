@@ -1,8 +1,0 @@
-PROFILE_CODE,PROFILE_TYPE,ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO,TOGVOC,CATEGORY_LEVEL_1_Generation_Mechanism,CATEGORY_LEVEL_2_Sector_Equipment
-1098,GAS,,1.1481060,Combustion,Mobile; Aircraft
-3150,GAS,,1.084716,Combustion,Mobile; Onroad; Light Duty
-8992,PM-AE6,1.200000048,1,Combustion,Mobile; Onroad; Light Duty
-8995VBS,PM-AE8,1.200000048,1,Combustion,Mobile; Onroad; Heavy Duty
-4241,PM,,1.0000000,Combustion,Mobile; Onroad
-103CROC,PM-CR1,1.200000048,1,Combustion,Mobile; Onroad; Non-DPF
-102GROC,GAS,,1.201651,Combustion,Mobile; Onroad

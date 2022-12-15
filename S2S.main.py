@@ -19,7 +19,7 @@ today     = date.today()
 ####################################################################################################
 ### User Input
 ### Photochemical mechanism; options include CB6R3_AE7, CB6R3_AE8, CB6R5_AE7, CB6R5_AE8, CRACMMv1.0, SAPRC07TC_AE7, SAPRC07TC_AE8, CB6R3_AE7_TRACER, CB6R4_CF2, SAPRC07_CF2, PM-AE6, PM-AE8, PM-CR1
-MECH_BASIS = 'PM-AE6'
+MECH_BASIS = 'PM-AE8'
 ### Output type; options include VOC, PM
 OUTPUT     = 'PM'
 ### Select run type; options include CRITERIA, INTEGRATE, NOINTEGRATE
@@ -56,9 +56,9 @@ sys.path.append('./modules/')
 ### Import oxygen/metals ratios:
 oxygen_metals    = pd.read_csv('./input/oxygen_metal_Ratios.csv')
 ### Import SPECIATE profiles table to be processed:
-profiles         = pd.read_csv('./input/export_profiles.csv')
+profiles         = pd.read_csv('./input/export_profiles.csv',converters={'PROFILE_CODE': str})
 ### Import SPECIATE species table to be processed:
-species          = pd.read_csv('./input/export_species.csv')
+species          = pd.read_csv('./input/export_species.csv',converters={'PROFILE_CODE': str})
 ### Import SPECIATE species properties table to facilitate processing:
 species_props    = pd.read_csv('./input/export_species_properties.csv')
 ### Import list of SPECIATE profiles where FPRM --> FCRS:
