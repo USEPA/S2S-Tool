@@ -95,9 +95,17 @@ def gen_gspro_voc(profiles,species,species_props,carbons,mech4import,tbl_tox,MEC
         if nmog_perc == 0.0:
             pass
         else:
-            nmog = pd.Series(data={'PROFILE':prof,'INPUT.POLL':i_poll,'MODEL.SPECIES':'NMOG','MASS.FRACTION':nmog_perc,\
-                                   'MOLECULAR.WGHT':1,'MASS.FRACTION1':nmog_perc})
-            molesplit = molesplit.append(nmog,ignore_index=True)
+            if MECH_BASIS == 'CB6R3_AE7_TRACER': # do not add NMOG to CB6R3_AE7_TRACER GSPRO; double counts mass
+                pass
+            else:
+                nmog = pd.Series(data={'PROFILE':prof,'INPUT.POLL':i_poll,'MODEL.SPECIES':'NMOG','MASS.FRACTION':nmog_perc,\
+                                       'MOLECULAR.WGHT':1,'MASS.FRACTION1':nmog_perc})
+                molesplit = molesplit.append(nmog,ignore_index=True)
+
+        if MECH_BASIS == 'CB6R3_AE7_TRACER': # remove NONBAF from CB6R3_AE7_TRACER GSPROs
+            NONBAF = pd.Series(data={'MODEL.SPECIES':'NONBAF'})
+            molesplit = molesplit.loc[~molesplit['MODEL.SPECIES'].isin(NONBAF)] # remove NONBAF from profile
+        else: pass
 
         dfgspro   = dfgspro.append(molesplit) # append profile gspro to final gspro
 
