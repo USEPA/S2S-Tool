@@ -35,9 +35,10 @@ def dfappend_cb6r3_ae7_tracer(dfin):
     log10cstar  = np.log10(molwght * Pvap / 8.31451 / 298.15 * 1000000)
     if ( pd.isnull(smiles) or smiles=='-' or pd.isnull(koh) ):
                              mechspecies = 'NONBAF' # Unreactive
-    elif ( spec_id=='279' ): mechspecies = 'ALD2_PRIMARY'
-    elif ( spec_id=='465' ): mechspecies = 'FORM_PRIMARY'
+    elif ( spec_id==279 ): mechspecies = 'ALD2_PRIMARY'
+    elif ( spec_id==465 ): mechspecies = 'FORM_PRIMARY'
     else: mechspecies = get_cb6r3_ae7_tracer_roc(smiles,log10cstar)
+    
     mech4import = pd.Series(data={'mechanism':mech,'SPECIES_ID':row['SPECIES_ID'],
                                   'mech_species':mechspecies,'moles_ratio':1})
     dfmech4import = dfmech4import.append(mech4import,ignore_index=True)
