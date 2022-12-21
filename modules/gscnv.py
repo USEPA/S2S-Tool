@@ -9,7 +9,7 @@ today     = date.today()
 ####################################################################################################
 
 ####################################################################################################
-def gen_gscnv(profiles,species,species_props,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERANCE,CNV_OUT):
+def gen_gscnv(profiles,species,species_props,tbl_tox,gscnv_append,MECH_BASIS,RUN_TYPE,TOLERANCE,CNV_OUT):
     
     ### gscnv file columns
     column_names  = ['INPUT.POLL','OUTPUT.POLL','PROFILE','OUTPUT.MASS/INPUT.MASS']
@@ -35,6 +35,11 @@ def gen_gscnv(profiles,species,species_props,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERAN
             gscnv_row = pd.Series(data={'INPUT.POLL':i_poll,'OUTPUT.POLL':o_poll,
                                         'PROFILE':prof,'OUTPUT.MASS/INPUT.MASS':ratio})
             dfgscnv   = dfgscnv.append(gscnv_row,ignore_index=True)
+
+        if RUN_TYPE=='CRITERIA':
+            gscnv_append = pd.merge(gscnv_append,dfgscnv[['PROFILE','OUTPUT.MASS/INPUT.MASS']],on='PROFILE',how ='left') # append TOG/VOC ratio
+            dfgscnv   = dfgscnv.append(gscnv_append,ignore_index=True)
+        else: pass
 
     else: # if RUN_TYPE=='INTEGRATE'
         for i in range(len(profiles)):
