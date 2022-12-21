@@ -19,9 +19,9 @@ today     = date.today()
 ####################################################################################################
 ### User Input
 ### Photochemical mechanism; options include CB6R3_AE7, CB6R3_AE8, CB6R5_AE7, CB6R5_AE8, CRACMMv1.0, SAPRC07TC_AE7, SAPRC07TC_AE8, CB6R3_AE7_TRACER, CB6R4_CF2, SAPRC07_CF2, PM-AE6, PM-AE8, PM-CR1
-MECH_BASIS = 'PM-AE8'
+MECH_BASIS = 'CB6R3_AE8'
 ### Output type; options include VOC, PM
-OUTPUT     = 'PM'
+OUTPUT     = 'VOC'
 ### Select run type; options include CRITERIA, INTEGRATE, NOINTEGRATE
 RUN_TYPE   = 'CRITERIA'
 ### Select air quality model; options include CMAQ, CAMX
@@ -63,6 +63,8 @@ species          = pd.read_csv('./input/export_species.csv',converters={'PROFILE
 species_props    = pd.read_csv('./input/export_species_properties.csv')
 ### Import list of SPECIATE profiles where FPRM --> FCRS:
 camx_fcrs        = pd.read_csv(FCRS_FILE)
+### Import list of profiles to append with variable IN/OUT pollutants:
+gscnv_append     = pd.read_csv('./input/gscnv_append.csv')
 ### Import carbons file:
 carbons          = pd.read_csv(CAR_FILE)
 ### Import mechanism_forImport file:
@@ -152,7 +154,7 @@ if OUTPUT=='VOC':
     if RUN_TYPE=='CRITERIA' or RUN_TYPE=='INTEGRATE' or RUN_TYPE=='NOINTEGRATE':
         print('NOTICE: Beginning generation of GSCNV file.')
         ### Create gscnv file for the target MECH_BASIS
-        gscnv.gen_gscnv(profiles,species,species_props,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERANCE,CNV_OUT)
+        gscnv.gen_gscnv(profiles,species,species_props,tbl_tox,gscnv_append,MECH_BASIS,RUN_TYPE,TOLERANCE,CNV_OUT)
         ### Formats and adds header to gscnv file
         gscnv.format_and_header(MECH_BASIS,RUN_TYPE,AQM,CAR_FILE,TOX_FILE,CNV_OUT)
         print('NOTICE: Finished generating GSCNV file.')
