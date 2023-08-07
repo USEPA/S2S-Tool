@@ -81,6 +81,7 @@ Combustion,Biomass Burning; Prescribed Fire; Slash,0.33,0,0.17,0.17,0.33,May et 
 Combustion,Biomass Burning; Residential Wood Combustion; Fireplace,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
 Combustion,Biomass Burning; Residential Wood Combustion; Fireplace; Woodstove,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
 Combustion,Biomass Burning; Residential Wood Combustion; Outdoor Boiler,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
+Combustion,Biomass Burning; Residential Wood Combustion; Hydronic Heater,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
 Combustion,Biomass Burning; Residential Wood Combustion; Woodstove,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
 Combustion,Biomass Burning; Wildfire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
 Combustion,Biomass Burning; Wildfire; Prescribed Fire,0.33,0,0.17,0.17,0.33,May et al 2013; Renormalized to N2 - P2
