@@ -8,26 +8,25 @@ import pandas as pd
 ####################################################################################################
 def check_basis_output(MECH_BASIS,OUTPUT):
     if OUTPUT=='VOC':
-        if MECH_BASIS=='CB6R3_AE7' or MECH_BASIS=='CB6R3_AE8' or MECH_BASIS=='CB6R5_AE7' or \
-           MECH_BASIS=='CB6R5_AE8' or MECH_BASIS=='CRACMMv1.0' or MECH_BASIS=='SAPRC07TC_AE7' or \
-           MECH_BASIS=='SAPRC07TC_AE8'  or MECH_BASIS=='CB6R4_CF2' or MECH_BASIS=='SAPRC07_CF2' or \
-           MECH_BASIS=='CB6R3_AE7_TRACER': pass
+        if MECH_BASIS=='CB6R3_AE7' or MECH_BASIS=='CB6R5_AE7' or MECH_BASIS=='CB7_AE7' or \
+           MECH_BASIS=='CB6R4_CF2' or MECH_BASIS=='CB7_CF2' or MECH_BASIS=='CB6R3_AE7_TRACER' or \
+           MECH_BASIS=='CRACMMv1.0' or MECH_BASIS=='SAPRC07TC_AE7' or MECH_BASIS=='SAPRC07_CF2': pass
         else:
             print('MECH_BASIS for OUTPUT==VOC is not allowed.')
-            sys.exit('Only CB6R3_AE7, CB6R3_AE8, CB6R5_AE7, CB6R5_AE8, CRACMMv0.3 are accepted.')
+            sys.exit('Only CB6R3_AE7, CB6R5_AE7, CB7_AE7, CB6R4_CF2, CB7_CF2, CB6R3_AE7_TRACER, CRACMMv1.0, SAPRC07TC_AE7, SAPRC07_CF2 are accepted.')
     elif OUTPUT=='PM':
-        if MECH_BASIS=='PM-AE6' or MECH_BASIS=='PM-AE8' or MECH_BASIS=='PM-CR1':
+        if MECH_BASIS=='PM-AE6' or MECH_BASIS=='PM-CR1':
             pass
         else:
             print('MECH_BASIS for OUTPUT==PM is not allowed.')
-            sys.exit('Only PM-AE6, PM-AE8, and PM-CR1 are accepted.')
+            sys.exit('Only PM-AE6 and PM-CR1 are accepted.')
     else: sys.exit('OUTPUT entered is not recognized. Only VOC and PM are allowed.')
 ####################################################################################################
 
 ####################################################################################################
-def check_inputs(carbons,mech4import,mechPM,tbl_tox,OUTPUT):
-    if carbons.empty and OUTPUT=='VOC':
-        sys.exit('The MECH_BASIS entered is not in the carbons file.')
+def check_inputs(molwght,mech4import,mechPM,tbl_tox,OUTPUT):
+    if molwght.empty and OUTPUT=='VOC':
+        sys.exit('The MECH_BASIS entered is not in the molwght file.')
     else:
         pass
     if mech4import.empty and OUTPUT=='VOC':
@@ -82,6 +81,23 @@ def check_tox_properties(species_props,tbl_tox):
         print('Species are in tbl_tox but not in export_species_properties. These include:')
         print(zero_MWs.loc[:,'SPECIES_ID'])
         sys.exit()
+####################################################################################################
+
+####################################################################################################
+def check_molwght_mech4import(molwght,mech4import,OUTPUT):
+    if OUTPUT=='VOC':
+        temp_mech = pd.merge(mech4import,molwght[['Species','SPEC_MW']],on='Species',how ='left').fillna(0) # append SPEC_MW
+        zero_MWs  = temp_mech.loc[temp_mech['SPEC_MW'] == 0.0]
+        zero_MWs  = zero_MWs.reset_index(drop=True) # reset index
+        if zero_MWs.empty:
+            pass
+        else:
+            print('Species are in mech4import but not in molwght. These include:')
+            print(zero_MWs.loc[:,'Species'])
+            sys.exit()
+    elif OUTPUT=='PM': pass
+    else: sys.exit('OUTPUT entered is not recognized. Only VOC and PM are allowed.')
+    print(zzz)
 ####################################################################################################
 
 ####################################################################################################
