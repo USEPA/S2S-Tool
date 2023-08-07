@@ -97,7 +97,6 @@ def check_molwght_mech4import(molwght,mech4import,OUTPUT):
             sys.exit()
     elif OUTPUT=='PM': pass
     else: sys.exit('OUTPUT entered is not recognized. Only VOC and PM are allowed.')
-    print(zzz)
 ####################################################################################################
 
 ####################################################################################################

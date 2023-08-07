@@ -10,7 +10,7 @@ today     = date.today()
 ####################################################################################################
 
 ####################################################################################################
-def gen_gspro_voc(profiles,species,species_props,carbons,mech4import,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERANCE,TOX_IN,PRO_OUT):
+def gen_gspro_voc(profiles,species,species_props,molwght,mech4import,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERANCE,TOX_IN,PRO_OUT):
     
     ### gscnv file columns
     column_names  = ['PROFILE','INPUT.POLL','MODEL.SPECIES','MASS.FRACTION','MOLECULAR.WGHT','MASS.FRACTION1']
@@ -63,32 +63,25 @@ def gen_gspro_voc(profiles,species,species_props,carbons,mech4import,tbl_tox,MEC
         temp_m4i  = mech4import.loc[mech4import['SPECIES_ID'].isin(spec_list)] # filter mech4import for spec_list
         temp_m4i  = temp_m4i.reset_index(drop=True) # reset index
         
-        temp_m4i  = pd.merge(temp_m4i,species_props[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left') # append MolWght
-        temp_m4i  = pd.merge(temp_m4i,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append Wght %
-        temp_m4i  = pd.merge(temp_m4i,carbons[['Species','nC']],on='Species',how ='left') # append nC per 1 model species
+        temp_mw   = pd.merge(temp_m4i,molwght[['Species','SPEC_MW']],on='Species',how ='left') # append MolWght
+        temp_mw.loc[:,'SPEC_MW'] = temp_mw.loc[:,'Moles'] * temp_mw.loc[:,'SPEC_MW'] # calculate total MW per explicit species    
+        temp_mw  = temp_mw.groupby('SPECIES_ID',as_index=False)['SPEC_MW'].sum() # calculate total MW for each compound
 
-        temp_m4i.loc[:,'totC'] = temp_m4i.loc[:,'Moles'] * temp_m4i.loc[:,'nC'] # calculate total nC per model species
+        temp_m4i  = pd.merge(temp_m4i,temp_mw[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left') # append MolWght
+        temp_m4i  = pd.merge(temp_m4i,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append Wght %
+
         temp_m4i.loc[:,'moleSpec_massVOC'] = temp_m4i.loc[:,'WEIGHT_PERCENT'] * temp_m4i.loc[:,'Moles'] / \
                                              temp_m4i.loc[:,'SPEC_MW'] # calculate mole model species / mass VOC
 
-        nC        = temp_m4i.groupby('SPECIES_ID',as_index=False)['totC'].sum() # calculate total nC for each compound
         molesplit = temp_m4i.groupby('Species',as_index=False)['moleSpec_massVOC'].sum() # calculate total mole model species / mass VOC
-        
-        temp_m4i  = pd.merge(temp_m4i,nC[['SPECIES_ID','totC']],on='SPECIES_ID',how ='left',suffixes=('_1','_2')) # append total nC for each compound
-        
-        temp_m4i.loc[:,'modSpec_MW'] = temp_m4i.loc[:,'SPEC_MW'] * temp_m4i.loc[:,'nC'] / temp_m4i.loc[:,'totC_2'] # calculate model species grams per mole
-        temp_m4i['moleSpec_massVOC'] /= temp_m4i.groupby('Species')['moleSpec_massVOC'].transform(sum) # normalize mole model species / mass VOC
-        temp_m4i.loc[:,'frac_modSpec_MW'] = temp_m4i.loc[:,'modSpec_MW'] * temp_m4i.loc[:,'moleSpec_massVOC'] # calculate fraction of model species grams per mole
+        molesplit = pd.merge(molesplit,molwght[['Species','SPEC_MW']],on='Species',how ='left') # append MolWght
 
-        final_MW  = temp_m4i.groupby('Species',as_index=False)['frac_modSpec_MW'].sum() # calculate final MW for each model species
-        molesplit = pd.merge(molesplit,final_MW[['Species','frac_modSpec_MW']],on='Species',how ='left') # append final MW for each model species
-
-        molesplit.loc[:,'MASS.FRACTION']  = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'frac_modSpec_MW'] # calculate final split factors
-        molesplit.loc[:,'MASS.FRACTION1'] = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'frac_modSpec_MW'] # calculate final split factors
+        molesplit.loc[:,'MASS.FRACTION']  = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'SPEC_MW'] # calculate final split factors
+        molesplit.loc[:,'MASS.FRACTION1'] = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'SPEC_MW'] # calculate final split factors
         molesplit.loc[:,'PROFILE']        = prof # add profile to dataframe
         molesplit.loc[:,'INPUT.POLL']     = i_poll # add input pollutant to dataframe
         molesplit = molesplit.rename(columns={'Species': 'MODEL.SPECIES'}) # rename Species column
-        molesplit = molesplit.rename(columns={'frac_modSpec_MW': 'MOLECULAR.WGHT'}) # rename frac_modSpec_MW column
+        molesplit = molesplit.rename(columns={'SPEC_MW': 'MOLECULAR.WGHT'}) # rename frac_modSpec_MW column
         molesplit = molesplit.drop(['moleSpec_massVOC'],axis=1) # drop moleSpec_massVOC column
         molesplit = molesplit[column_names] # reorder columns
         
@@ -165,16 +158,20 @@ def gen_gspro_pm(profiles,species,species_props,mechPM,tbl_tox,poa_volatility,po
             temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 700, 'WEIGHT_PERCENT'] = 0
             # Add MO, metal bound oxygen, if necessary
             oxygen_metals_temp  = pd.merge(oxygen_metals,temp_spec_pm[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append WEIGHT_PERCENT
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] == 0 or oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0] == 0:
+            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
+                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0] == 0:
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = 0.0
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0] == 0 or oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0] == 0:
+            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
+                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0] == 0:
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'] = 0.0
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0] == 0 or oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0] == 0:
+            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
+                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0] == 0:
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'] = 0.0
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0] == 0 or oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] == 0:
+            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
+                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] == 0:
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'] = 0.0
                 oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'] = 0.0
             oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] - \
@@ -258,56 +255,6 @@ def gen_gspro_pm(profiles,species,species_props,mechPM,tbl_tox,poa_volatility,po
                                                                                  profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POC
                 temp_mech.loc[temp_mech['Species'] == 'PNCOM', 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * (1 - 1 / \
                                                                                    profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOM
-            else: sys.exit('PROFILE_TYPE = '+profiles.loc[i,'PROFILE_TYPE']+' for profile '+prof+' is not recognized.')
-
-        elif MECH_BASIS == 'PM-AE8':
-            if profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE6' or profiles.loc[i,'PROFILE_TYPE'] == 'PM':
-                temp_mech.loc[temp_mech['Species'] == 'POCN2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'-2'][0] # add POCN2
-                temp_mech.loc[temp_mech['Species'] == 'POCN1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'-1'][0] # add POCN1
-                temp_mech.loc[temp_mech['Species'] == 'POCP0', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'0'][0] # add POCP0
-                temp_mech.loc[temp_mech['Species'] == 'POCP1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'1'][0] # add POCP1
-                temp_mech.loc[temp_mech['Species'] == 'POCP2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'2'][0] # add POCP2
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMN2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'-2'][0] # add PNCOMN2
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMN1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'-1'][0] # add PNCOMN1
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP0', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'0'][0] # add PNCOMP0
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'1'][0] # add PNCOMP1
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() * \
-                                                                                   temp_poa.loc[:,'2'][0] # add PNCOMP2
-
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE8':
-                pass # SV-POA already appropriately mapped in base profile.
-
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-CR1':
-                temp_mech.loc[temp_mech['Species'] == 'POCN2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -2, 'WEIGHT_PERCENT'].sum() * \
-                                                                                   1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POCN2
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMN2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -2, 'WEIGHT_PERCENT'].sum() * \
-                                                                                     (1 - 1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOMN2
-                temp_mech.loc[temp_mech['Species'] == 'POCN1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -1, 'WEIGHT_PERCENT'].sum() * \
-                                                                                   1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POCN1
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMN1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -1, 'WEIGHT_PERCENT'].sum() * \
-                                                                                     (1 - 1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOMN1
-                temp_mech.loc[temp_mech['Species'] == 'POCP0', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 0, 'WEIGHT_PERCENT'].sum() * \
-                                                                                   1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POCP0
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP0', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 0, 'WEIGHT_PERCENT'].sum() * \
-                                                                                     (1 - 1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOMP0
-                temp_mech.loc[temp_mech['Species'] == 'POCP1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 1, 'WEIGHT_PERCENT'].sum() * \
-                                                                                   1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POCP1
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP1', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 1, 'WEIGHT_PERCENT'].sum() * \
-                                                                                     (1 - 1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOMP1
-                temp_mech.loc[temp_mech['Species'] == 'POCP2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 2, 'WEIGHT_PERCENT'].sum() * \
-                                                                                   1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POCP2
-                temp_mech.loc[temp_mech['Species'] == 'PNCOMP2', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 2, 'WEIGHT_PERCENT'].sum() * \
-                                                                                     (1 - 1 / profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOMP2
-
             else: sys.exit('PROFILE_TYPE = '+profiles.loc[i,'PROFILE_TYPE']+' for profile '+prof+' is not recognized.')
 
         elif MECH_BASIS == 'PM-CR1':
@@ -434,7 +381,7 @@ def gen_gspro_pm(profiles,species,species_props,mechPM,tbl_tox,poa_volatility,po
 ####################################################################################################
 
 ####################################################################################################
-def format_and_header(tbl_tox,TOX_IN,MECH_BASIS,RUN_TYPE,AQM,CAR_FILE,FCRS_FILE,TOX_FILE,PRO_OUT):
+def format_and_header(tbl_tox,TOX_IN,MECH_BASIS,RUN_TYPE,AQM,MW_FILE,FCRS_FILE,TOX_FILE,PRO_OUT):
 
     ################################################################################################
     ### Import gscnv csv file.
@@ -444,7 +391,7 @@ def format_and_header(tbl_tox,TOX_IN,MECH_BASIS,RUN_TYPE,AQM,CAR_FILE,FCRS_FILE,
     ################################################################################################
     headerline1   = '#S2S_AQM             '+AQM
     headerline2   = '#S2S_CAMX_FCRS       '+FCRS_FILE
-    headerline3   = '#S2S_CARBONS         '+CAR_FILE
+    headerline3   = '#S2S_MW              '+MW_FILE
     headerline4   = '#S2S_MECH_BASIS      '+MECH_BASIS
     headerline5   = '#S2S_RUN_TYPE        '+RUN_TYPE
     headerline6   = '#S2S_RUN_DATE        '+str(today)

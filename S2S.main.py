@@ -23,7 +23,7 @@ MECH_BASIS = 'CB7_AE7'
 ### Output type; options include VOC, PM
 OUTPUT     = 'VOC'
 ### Select run type; options include CRITERIA, INTEGRATE, NOINTEGRATE
-RUN_TYPE   = 'INTEGRATE'
+RUN_TYPE   = 'CRITERIA'
 ### Select air quality model; options include CMAQ, CAMX
 AQM        = 'CMAQ'
 ### Assign acceptable deviation from 100% allowable. Applies only to gas profiles.
