@@ -65,7 +65,7 @@ def gen_gspro_voc(profiles,species,species_props,molwght,mech4import,tbl_tox,MEC
         
         temp_mw   = pd.merge(temp_m4i,molwght[['Species','SPEC_MW']],on='Species',how ='left') # append MolWght
         temp_mw.loc[:,'SPEC_MW'] = temp_mw.loc[:,'Moles'] * temp_mw.loc[:,'SPEC_MW'] # calculate total MW per explicit species    
-        temp_mw  = temp_mw.groupby('SPECIES_ID',as_index=False)['SPEC_MW'].sum() # calculate total MW for each compound
+        temp_mw  = temp_mw.groupby('SPECIES_ID',as_index=False)['SPEC_MW'].sum() # calculate effective MW for each compound
 
         temp_m4i  = pd.merge(temp_m4i,temp_mw[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left') # append MolWght
         temp_m4i  = pd.merge(temp_m4i,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append Wght %
