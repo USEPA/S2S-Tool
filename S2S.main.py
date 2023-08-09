@@ -19,7 +19,7 @@ today     = date.today()
 ####################################################################################################
 ### User Input
 ### Photochemical mechanism; options include CB6R3_AE7, CB6R5_AE7, CB7_AE7, CRACMMv1.0, SAPRC07TC_AE7, CB6R3_AE7_TRACER, CB6R4_CF2, CB7_CF2, SAPRC07_CF2, PM-AE6, PM-CR1
-MECH_BASIS = 'CB7_AE7'
+MECH_BASIS = 'CB6R3_AE7'
 ### Output type; options include VOC, PM
 OUTPUT     = 'VOC'
 ### Select run type; options include CRITERIA, INTEGRATE, NOINTEGRATE
