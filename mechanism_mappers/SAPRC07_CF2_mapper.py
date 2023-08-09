@@ -43,7 +43,7 @@ def dfappend_saprc07_cf2(dfin):
 
   # write mech4import df to file
   today = date.today()
-  dfmech4import.to_csv('./mechanism_forImport/mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
+  dfmech4import.to_csv('./mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
   
   return 
 
@@ -62,7 +62,7 @@ def get_saprc07_cf2_roc(smiles,log10cstar,koh):
   smiles  = smiles.upper()
 
   # Count C=C and atoms
-  nCdblC  = smiles.count('=C')
+  nCdblC  = smiles.count('=C')-smiles.count('O=C')
   nCtripC = smiles.count('#C')
   nC      = smiles.count('C')-smiles.count('CL')
   nO      = smiles.count('O')
