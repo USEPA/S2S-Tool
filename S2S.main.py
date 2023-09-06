@@ -37,7 +37,7 @@ MW_FILE    = './input/mechanism_mw.csv'
 ### mechanism_forImport file name & path:
 M4I_FILE   = './input/mechanism_forImport_SPECIATEv5_3.csv'
 ### pm_mech file name & path:
-PMM_FILE   = './input/mech_pm_ae5_ae6_ae8_cr1.csv'
+PMM_FILE   = './input/mech_pm_ae5_ae6_cr1.csv'
 ### tbl_tox file name & path:
 TOX_FILE   = './input/tbl_tox_NBAFM.csv' # 'tbl_tox_NBAFM.csv' ; 'tbl_tox_TOM.csv' ; 'tbl_tox_RESID_PM.csv' ; 'tbl_tox_MOVES_HAPS.csv'
 ####################################################################################################
