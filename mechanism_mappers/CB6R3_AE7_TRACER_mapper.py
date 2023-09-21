@@ -45,7 +45,7 @@ def dfappend_cb6r3_ae7_tracer(dfin):
 
   # write mech4import df to file
   today = date.today()
-  dfmech4import.to_csv('./mechanism_forImport/mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
+  dfmech4import.to_csv('./mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
   
   return 
 

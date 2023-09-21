@@ -71,7 +71,7 @@ def gen_gscnv(profiles,species,species_props,tbl_tox,gscnv_append,MECH_BASIS,RUN
     dfgscnv.to_csv(CNV_OUT,index=False,header=False)
 
 ####################################################################################################
-def format_and_header(MECH_BASIS,RUN_TYPE,AQM,CAR_FILE,TOX_FILE,CNV_OUT):
+def format_and_header(MECH_BASIS,RUN_TYPE,AQM,MW_FILE,TOX_FILE,CNV_OUT):
 
     ################################################################################################
     ### Import gscnv csv file.
@@ -81,7 +81,7 @@ def format_and_header(MECH_BASIS,RUN_TYPE,AQM,CAR_FILE,TOX_FILE,CNV_OUT):
     ################################################################################################
     headerline1   = '#S2S_AQM             '+AQM
     headerline2   = '#S2S_CAMX_FCRS       Not Applicable'
-    headerline3   = '#S2S_CARBONS         '+CAR_FILE
+    headerline3   = '#S2S_MW              '+MW_FILE
     headerline4   = '#S2S_MECH_BASIS      '+MECH_BASIS
     headerline5   = '#S2S_RUN_TYPE        '+RUN_TYPE
     headerline6   = '#S2S_RUN_DATE        '+str(today)

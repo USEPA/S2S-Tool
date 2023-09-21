@@ -48,7 +48,7 @@ def dfappend_cb6r3_ae7(dfin):
 
   # write mech4import df to file
   today = date.today()
-  dfmech4import.to_csv('./mechanism_forImport/mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
+  dfmech4import.to_csv('./mechanism_forImport_'+mech+'_speciate5_2_'+str(today)+'.csv',index=False,header=False)
   
   return 
 
@@ -67,7 +67,7 @@ def get_cb6r3_ae7_roc(smiles,log10cstar,koh):
   smiles  = smiles.upper()
 
   # Count C=C and atoms
-  nCdblC  = smiles.count('=C')
+  nCdblC  = smiles.count('=C')-smiles.count('O=C')
   nCtripC = smiles.count('#C')
   nC      = smiles.count('C')-smiles.count('CL')
   nO      = smiles.count('O')
@@ -314,74 +314,22 @@ def get_cb6r3_ae7_roc(smiles,log10cstar,koh):
            mechspecies, mole_ratio = 'TOL', 1
            carbon_count = nC - 7
            if carbon_count > 0:
-               if ( nCdblC==4 and ntermalke>0 ):
-                   nCdblC = nCdblC - 1
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'OLE',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],ntermalke
-                   else:
-                       mechspecies = mechspecies,'OLE',
-                       mole_ratio  = mole_ratio,ntermalke
-                   carbon_count = carbon_count - 2 * ntermalke
-               if ( nCdblC==4 and carbon_count>=4 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'IOLE',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],1
-                   else:
-                       mechspecies = mechspecies,'IOLE',
-                       mole_ratio  = mole_ratio,1
-                   carbon_count = carbon_count - 4
-               if ( nketone>0 and carbon_count>0 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'KET',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],nketone
-                   else:
-                       mechspecies = mechspecies,'KET',
-                       mole_ratio  = mole_ratio,nketone
-                   carbon_count = carbon_count - nketone
-               if ( carbon_count>0 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'PAR',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
-                   else:
-                       mechspecies = mechspecies,'PAR',
-                       mole_ratio  = mole_ratio,carbon_count
+               if len(mechspecies)==2:
+                   mechspecies = mechspecies[0],mechspecies[1],'PAR',
+                   mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
+               else:
+                   mechspecies = mechspecies,'PAR',
+                   mole_ratio  = mole_ratio,carbon_count
        elif ( nC>=8 and nBranch>1 ): # Xylene and other polyalkyl aromatics
            mechspecies, mole_ratio = 'XYLMN', 1
            carbon_count = nC - 8
            if carbon_count > 0:
-               if ( nCdblC==4 and ntermalke>0 ):
-                   nCdblC = nCdblC - 1
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'OLE',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],ntermalke
-                   else:
-                       mechspecies = mechspecies,'OLE',
-                       mole_ratio  = mole_ratio,ntermalke
-                   carbon_count = carbon_count - 2 * ntermalke
-               if ( nCdblC==4 and carbon_count>=4 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'IOLE',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],1
-                   else:
-                       mechspecies = mechspecies,'IOLE',
-                       mole_ratio  = mole_ratio,1
-                   carbon_count = carbon_count - 4
-               if ( nketone>0 and carbon_count>0 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'KET',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],nketone
-                   else:
-                       mechspecies = mechspecies,'KET',
-                       mole_ratio  = mole_ratio,nketone
-                   carbon_count = carbon_count - nketone
-               if ( carbon_count>0 ):
-                   if len(mechspecies)==2:
-                       mechspecies = mechspecies[0],mechspecies[1],'PAR',
-                       mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
-                   else:
-                       mechspecies = mechspecies,'PAR',
-                       mole_ratio  = mole_ratio,carbon_count
+               if len(mechspecies)==2:
+                   mechspecies = mechspecies[0],mechspecies[1],'PAR',
+                   mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
+               else:
+                   mechspecies = mechspecies,'PAR',
+                   mole_ratio  = mole_ratio,carbon_count
        else:
            carbon_count = nC
            if carbon_count > 0:
@@ -533,38 +481,12 @@ def get_cb6r3_ae7_roc(smiles,log10cstar,koh):
       mechspecies, mole_ratio = 'PACD', 1
       carbon_count = nC - 2
       if carbon_count > 0:
-          if ( nCdblC>0 and ntermalke>0 ):
-              nCdblC = nCdblC - 1
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'OLE',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],ntermalke
-              else:
-                  mechspecies = mechspecies,'OLE',
-                  mole_ratio  = mole_ratio,ntermalke
-              carbon_count = carbon_count - 2 * ntermalke
-          if ( nCdblC>0 and carbon_count>=4 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'IOLE',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],1
-              else:
-                  mechspecies = mechspecies,'IOLE',
-                  mole_ratio  = mole_ratio,1
-              carbon_count = carbon_count - 4
-          if ( nketone>0 and carbon_count>0 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'KET',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],nketone
-              else:
-                  mechspecies = mechspecies,'KET',
-                  mole_ratio  = mole_ratio,nketone
-              carbon_count = carbon_count - nketone
-          if ( carbon_count>0 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'PAR',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
-              else:
-                  mechspecies = mechspecies,'PAR',
-                  mole_ratio  = mole_ratio,carbon_count
+          if len(mechspecies)==2:
+              mechspecies = mechspecies[0],mechspecies[1],'PAR',
+              mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
+          else:
+              mechspecies = mechspecies,'PAR',
+              mole_ratio  = mole_ratio,carbon_count
  # Other
   else:
       carbon_count = nC
@@ -621,6 +543,124 @@ def get_cb6r3_ae7_roc(smiles,log10cstar,koh):
                   else:
                       mechspecies = mechspecies,'PAR',
                       mole_ratio  = mole_ratio,carbon_count   
+  # Limit functional groups to 1 with this priority: TOL > XYL > IOLE > OLE > ALDX > KET; per Greg Yarwood
+  countfg   = 0
+  countole  = 0
+  if 'IOLE' in mechspecies: countfg += 1
+  for ele in mechspecies:
+      if (ele == 'OLE'):
+          countole += 1
+          if (ele == 'IOLE'): countole -= 1
+  if countole > 0:  countfg += 1
+  if 'ALDX' in mechspecies:  countfg += 1
+  if 'KET' in mechspecies:  countfg += 1
+  
+  if countfg > 1:
+      carbon_count = nC
+      if 'IOLE' in mechspecies:
+          ind = 0
+          for ele in mechspecies:
+              if (ele == 'IOLE'):
+                  temp_mechspecies = 'IOLE'
+                  temp_mole_ratio  = mole_ratio[ind]
+                  carbon_count -= 4
+                  if ( carbon_count>0 ):
+                      temp_mechspecies = temp_mechspecies,'PAR',
+                      temp_mole_ratio  = temp_mole_ratio,carbon_count
+              else: pass
+              ind += 1
+      elif 'OLE' in mechspecies:
+          ind = 0
+          for ele in mechspecies:
+              if (ele == 'OLE'):
+                  temp_mechspecies = 'OLE'
+                  temp_mole_ratio  = mole_ratio[ind]
+                  carbon_count -= 2
+                  if ( carbon_count>0 ):
+                      temp_mechspecies = temp_mechspecies,'PAR',
+                      temp_mole_ratio  = temp_mole_ratio,carbon_count
+              else: pass
+              ind += 1
+      elif 'KET' in mechspecies:
+          ind = 0
+          for ele in mechspecies:
+              if (ele == 'KET'):
+                  temp_mechspecies = 'KET'
+                  temp_mole_ratio  = mole_ratio[ind]
+                  carbon_count -= 1
+                  if ( carbon_count>0 ):
+                      temp_mechspecies = temp_mechspecies,'PAR',
+                      temp_mole_ratio  = temp_mole_ratio,carbon_count
+              else: pass
+              ind += 1
+      elif 'ALDX' in mechspecies:
+          ind = 0
+          for ele in mechspecies:
+              if (ele == 'ALDX'):
+                  temp_mechspecies = 'ALDX'
+                  temp_mole_ratio  = mole_ratio[ind]
+                  carbon_count -= 2
+                  if ( carbon_count>0 ):
+                      temp_mechspecies = temp_mechspecies,'PAR',
+                      temp_mole_ratio  = temp_mole_ratio,carbon_count
+              else: pass
+              ind += 1
+      mechspecies = temp_mechspecies
+      mole_ratio  = temp_mole_ratio
+  # If OLE/PAR > 1, OLE = (PAR + 2 OLE)/3 and then PAR = OLE; per Greg Yarwood
+  countpar  = 0
+  countole  = 0
+  if 'PAR' in mechspecies and 'IOLE' in mechspecies:
+      pass
+  elif 'PAR' in mechspecies and 'OLE' in mechspecies:
+      ind = 0
+      for ele in mechspecies:
+          if (ele == 'PAR'):
+              countpar = mole_ratio[ind]
+          ind += 1
+      ind = 0
+      for ele in mechspecies:
+          if (ele == 'OLE'):
+              countole = mole_ratio[ind]
+          ind += 1
+  elif 'IOLE' in mechspecies:
+      pass
+  elif 'OLE' in mechspecies:
+      countole = mole_ratio
+  if countpar == 0: countpar = 0.1
+  if countole / countpar > 1:
+      if countpar == 0.1: countpar = 0
+      temp_mechspecies = 'OLE'
+      temp_mole_ratio  = (countpar + 2 * countole) / 3
+      temp_mechspecies = temp_mechspecies,'PAR',
+      temp_mole_ratio  = temp_mole_ratio,((countpar + 2 * countole) / 3)
+      mechspecies = temp_mechspecies
+      mole_ratio  = temp_mole_ratio
+  # If KET/PAR > 0.333, KET = (PAR + KET)/4 and then PAR = 3*KET; per Greg Yarwood
+  countpar  = 0
+  countket  = 0
+  if 'PAR' in mechspecies and 'KET' in mechspecies:
+      ind = 0
+      for ele in mechspecies:
+          if (ele == 'PAR'):
+              countpar = mole_ratio[ind]
+          ind += 1
+      ind = 0
+      for ele in mechspecies:
+          if (ele == 'KET'):
+              countket = mole_ratio[ind]
+          ind += 1
+  elif 'KET' in mechspecies:
+      countket = mole_ratio
+  if countpar == 0: countpar = 0.1
+  if countket / countpar > 0.3334:
+      if countpar == 0.1: countpar = 0
+      temp_mechspecies = 'KET'
+      temp_mole_ratio  = (countpar + countket) / 4
+      temp_mechspecies = temp_mechspecies,'PAR',
+      temp_mole_ratio  = temp_mole_ratio,((countpar + countket) / 4 * 3)
+      mechspecies = temp_mechspecies
+      mole_ratio  = temp_mole_ratio
   return mechspecies, mole_ratio
   # end of function
 
