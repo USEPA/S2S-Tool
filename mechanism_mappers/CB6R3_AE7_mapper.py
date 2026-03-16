@@ -40,11 +40,11 @@ def dfappend_cb6r3_ae7(dfin):
         for i in range(len(mechspecies)):
             mech4import = pd.Series(data={'mechanism':mech,'SPECIES_ID':row['SPECIES_ID'],
                                           'mech_species':mechspecies[i],'moles_ratio':mole_ratio[i]})
-            dfmech4import = dfmech4import.append(mech4import,ignore_index=True)
+            dfmech4import = pd.concat([dfmech4import,pd.DataFrame([mech4import])],ignore_index=True)
     else:
         mech4import = pd.Series(data={'mechanism':mech,'SPECIES_ID':row['SPECIES_ID'],
                                       'mech_species':mechspecies,'moles_ratio':mole_ratio})
-        dfmech4import = dfmech4import.append(mech4import,ignore_index=True)
+        dfmech4import = pd.concat([dfmech4import,pd.DataFrame([mech4import])],ignore_index=True)
 
   # write mech4import df to file
   today = date.today()
@@ -256,50 +256,13 @@ def get_cb6r3_ae7_roc(smiles,log10cstar,koh):
               else:
                   mechspecies = mechspecies,'PAR',
                   mole_ratio  = mole_ratio,carbon_count
-  # Triple bonds; contains no other functional groups
-  elif ( nCtripC>=1 and nBranch==0 and nCdblC==0 and nacid==0 and ncarbonyl==0 and nalcohol==0):
+  # Triple bonds
+  elif ( nCtripC>=1 ):
       mechspecies, mole_ratio = 'OLE', 1
       carbon_count = nC - 2
       if carbon_count > 0:
           mechspecies = mechspecies,'PAR',
           mole_ratio  = mole_ratio,carbon_count
-  # Triple bonds; contains other functional groups
-  elif ( nCtripC>=1 and (nBranch>=1 or nCdblC>=1 or nacid>=1 or ncarbonyl>=1 or nalcohol>=1)):
-      mechspecies, mole_ratio = 'PAR', nCtripC
-      carbon_count = nC - nCtripC
-      if carbon_count > 0:
-          if ( (nCdblC>1 or ntermalke>0)  and carbon_count>=2):
-              nCdblC = nCdblC - 1
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'OLE',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],ntermalke
-              else:
-                  mechspecies = mechspecies,'OLE',
-                  mole_ratio  = mole_ratio,ntermalke
-              carbon_count = carbon_count - 2 * ntermalke
-          if ( nCdblC>2 and carbon_count>=4 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'IOLE',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],1
-              else:
-                  mechspecies = mechspecies,'IOLE',
-                  mole_ratio  = mole_ratio,1
-              carbon_count = carbon_count - 4
-          if ( nketone>0 and carbon_count>0 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'KET',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],nketone
-              else:
-                  mechspecies = mechspecies,'KET',
-                  mole_ratio  = mole_ratio,nketone
-              carbon_count = carbon_count - nketone
-          if ( carbon_count>0 ):
-              if len(mechspecies)==2:
-                  mechspecies = mechspecies[0],mechspecies[1],'PAR',
-                  mole_ratio  = mole_ratio[0],mole_ratio[1],carbon_count
-              else:
-                  mechspecies = mechspecies,'PAR',
-                  mole_ratio  = mole_ratio,carbon_count
   # Single-ring aromatics
   elif ( nbenzene==1 ): # Single-ring aromatics
        if ( nC>=7 and nalcohol>=2 ):      mechspecies, mole_ratio = 'CAT1', 1  # Methyl-catechols

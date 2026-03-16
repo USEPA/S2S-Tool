@@ -41,7 +41,7 @@ def dfappend_cb6r3_ae7_tracer(dfin):
     
     mech4import = pd.Series(data={'mechanism':mech,'SPECIES_ID':row['SPECIES_ID'],
                                   'mech_species':mechspecies,'moles_ratio':1})
-    dfmech4import = dfmech4import.append(mech4import,ignore_index=True)
+    dfmech4import = pd.concat([dfmech4import,pd.DataFrame([mech4import])],ignore_index=True)
 
   # write mech4import df to file
   today = date.today()

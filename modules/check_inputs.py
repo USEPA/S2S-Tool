@@ -1,145 +1,283 @@
-import sys
+from typing import Sequence
 import pandas as pd
+import numpy as np
 
 ####################################################################################################
-### These functions perform QA checks on input files. 
-####################################################################################################
-
-####################################################################################################
-def check_basis_output(MECH_BASIS,OUTPUT):
-    if OUTPUT=='VOC':
-        if MECH_BASIS=='CB6R3_AE7' or MECH_BASIS=='CB6R5_AE7' or MECH_BASIS=='CB7_AE7' or \
-           MECH_BASIS=='CB6R4_CF2' or MECH_BASIS=='CB7_CF2' or MECH_BASIS=='CB6R3_AE7_TRACER' or \
-           MECH_BASIS=='CRACMMv1.0' or MECH_BASIS=='SAPRC07TC_AE7' or MECH_BASIS=='SAPRC07_CF2': pass
-        else:
-            print('MECH_BASIS for OUTPUT==VOC is not allowed.')
-            sys.exit('Only CB6R3_AE7, CB6R5_AE7, CB7_AE7, CB6R4_CF2, CB7_CF2, CB6R3_AE7_TRACER, CRACMMv1.0, SAPRC07TC_AE7, SAPRC07_CF2 are accepted.')
-    elif OUTPUT=='PM':
-        if MECH_BASIS=='PM-AE6' or MECH_BASIS=='PM-CR1':
-            pass
-        else:
-            print('MECH_BASIS for OUTPUT==PM is not allowed.')
-            sys.exit('Only PM-AE6 and PM-CR1 are accepted.')
-    else: sys.exit('OUTPUT entered is not recognized. Only VOC and PM are allowed.')
+### QA checks for S2S-Tool inputs
 ####################################################################################################
 
 ####################################################################################################
-def check_inputs(molwght,mech4import,mechPM,tbl_tox,OUTPUT):
-    if molwght.empty and OUTPUT=='VOC':
-        sys.exit('The MECH_BASIS entered is not in the molwght file.')
+def _require_columns(df: pd.DataFrame, required: Sequence[str], df_name: str) -> None:
+    """
+    Ensure that a DataFrame contains all required columns.
+    Raises ValueError with a helpful message if any are missing.
+    """
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Required columns missing in {df_name}: {missing}. "
+            f"Columns present: {list(df.columns)}"
+        )
+####################################################################################################
+
+####################################################################################################
+def check_basis_output(MECH_BASIS: str, OUTPUT: str) -> None:
+    """
+    Validate that the MECH_BASIS is allowed for the selected OUTPUT.
+    """
+    allowed_voc = {
+        'CB6R3_AE7', 'CB6R5_AE7', 'CB7_AE7', 'CB6R4_CF2', 'CB7_CF2',
+        'CB7VCP_CF2', 'CB7VCP_CF2', 'CB6R3_AE7_TRACER', 'CRACMMv1.0',
+        'CRACMMv2.0','SAPRC07TC_AE7', 'SAPRC07_CF2', 'GEOSChem14.6.3'}
+    allowed_pm = {'PM-AE6', 'PM-CR1', 'PM-CR2', 'PM-GC'}
+
+    if OUTPUT == 'VOC':
+        if MECH_BASIS not in allowed_voc:
+            raise ValueError(
+                "MECH_BASIS for OUTPUT==VOC is not allowed. "
+                f"Allowed: {sorted(allowed_voc)}. Got: {MECH_BASIS}"
+            )
+    elif OUTPUT == 'PM':
+        if MECH_BASIS not in allowed_pm:
+            raise ValueError(
+                "MECH_BASIS for OUTPUT==PM is not allowed. "
+                f"Allowed: {sorted(allowed_pm)}. Got: {MECH_BASIS}"
+            )
     else:
-        pass
-    if mech4import.empty and OUTPUT=='VOC':
-        sys.exit('The MECH_BASIS entered is not in the mechanism_forImport file.')
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
+####################################################################################################
+
+####################################################################################################
+def check_inputs(molwght: pd.DataFrame, mech4import: pd.DataFrame, mechPM: pd.DataFrame,
+                 profiles: pd.DataFrame, tbl_tox: pd.DataFrame, OUTPUT: str) -> None:
+    """
+    Validate that key filtered inputs are present (non-empty) given OUTPUT.
+    """
+    if OUTPUT == 'VOC':
+        if molwght.empty:
+            raise ValueError("The MECH_BASIS entered is not in the molwght file (after filtering).")
+        if mech4import.empty:
+            raise ValueError("The MECH_BASIS entered is not in the mechanism_forImport file (after filtering).")
+        if profiles.empty:
+            raise ValueError("profiles file empty (after filtering).")
+    elif OUTPUT == 'PM':
+        if mechPM.empty:
+            raise ValueError("The MECH_BASIS and AQM entered is not in the mech_pm file (after filtering).")
+        if profiles.empty:
+            raise ValueError("profiles file empty (after filtering).")
     else:
-        pass
-    if mechPM.empty and OUTPUT=='PM':
-        sys.exit('The MECH_BASIS and AQM entered is not in the mech_pm file.')
-    else:
-        pass
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
+
     if tbl_tox.empty:
-        sys.exit('The AQM entered is not in the tbl_tox file.')
-    else:
-        pass
+        raise ValueError("The AQM entered is not in the tbl_tox file (after filtering).")
 ####################################################################################################
 
 ####################################################################################################
-def check_species_profiles(profiles,species):
-    prof_sum  = species.groupby('PROFILE_CODE',as_index=False)['WEIGHT_PERCENT'].sum()  # Sum WEIGHT_PERCENT for each profile
-    temp_prof = pd.merge(profiles,prof_sum[['PROFILE_CODE','WEIGHT_PERCENT']],on='PROFILE_CODE',how ='left') # append WEIGHT_PERCENT
-    zero_sums = temp_prof[temp_prof['WEIGHT_PERCENT'].isna()]
-    zero_sums = zero_sums.reset_index(drop=True) # reset index
-    if zero_sums.empty:
-        pass
-    else:
-        print('Profile(s) are in export_profiles but not in export_species. These include:')
-        print(zero_sums.loc[:,'PROFILE_CODE'])
-        sys.exit()
+def check_species_profiles(profiles: pd.DataFrame, species: pd.DataFrame) -> None:
+    """
+    Ensure all profiles in export_profiles are represented in export_species.
+    """
+    _require_columns(profiles, ['PROFILE_CODE'], 'profiles')
+    _require_columns(species, ['PROFILE_CODE'], 'species')
+
+    profile_codes = set(profiles['PROFILE_CODE'])
+    species_codes = set(species['PROFILE_CODE'])
+
+    missing = sorted(profile_codes - species_codes)
+    if missing:
+        raise ValueError(
+            "Profiles are in export_profiles but not in export_species. "
+            f"Missing PROFILE_CODEs: {missing}"
+        )
 ####################################################################################################
 
 ####################################################################################################
-def check_species_properties(species_props,species):
-    temp_spec = pd.merge(species,species_props[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left').fillna(0) # append MolWght
-    zero_MWs  = temp_spec.loc[temp_spec['SPEC_MW'] == 0.0]
-    zero_MWs  = zero_MWs.reset_index(drop=True) # reset index
-    if zero_MWs.empty:
-        pass
-    else:
-        print('Species are in export_species but not in export_species_properties. These include:')
-        print(zero_MWs.loc[:,'SPECIES_ID'])
-        sys.exit()
+def check_species_properties(species_props: pd.DataFrame, species: pd.DataFrame) -> None:
+    """
+    Ensure all species in export_species have properties (e.g., molecular weight).
+    """
+    _require_columns(species_props, ['SPECIES_ID'], 'species_props')
+    _require_columns(species, ['SPECIES_ID'], 'species')
+
+    species_ids = set(species['SPECIES_ID'])
+    props_ids = set(species_props['SPECIES_ID'])
+
+    missing = sorted(species_ids - props_ids)
+    if missing:
+        raise ValueError(
+            "Species found in export_species but missing from export_species_properties. "
+            f"Missing SPECIES_IDs: {missing}"
+        )
 ####################################################################################################
 
 ####################################################################################################
-def check_tox_properties(species_props,tbl_tox):
-    temp_tox  = pd.merge(tbl_tox,species_props[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left').fillna(0) # append MolWght
-    zero_MWs  = temp_tox.loc[temp_tox['SPEC_MW'] == 0.0]
-    zero_MWs  = zero_MWs.reset_index(drop=True) # reset index
-    if zero_MWs.empty:
-        pass
-    else:
-        print('Species are in tbl_tox but not in export_species_properties. These include:')
-        print(zero_MWs.loc[:,'SPECIES_ID'])
-        sys.exit()
+def check_tox_properties(species_props: pd.DataFrame, tbl_tox: pd.DataFrame) -> None:
+    """
+    Ensure all species in tbl_tox have entries in species_props.
+    """
+    _require_columns(species_props, ['SPECIES_ID'], 'species_props')
+    _require_columns(tbl_tox, ['SPECIES_ID'], 'tbl_tox')
+
+    tox_ids = set(tbl_tox['SPECIES_ID'])
+    props_ids = set(species_props['SPECIES_ID'])
+
+    missing = sorted(tox_ids - props_ids)
+    if missing:
+        raise ValueError(
+            "Species found in tbl_tox but missing from export_species_properties. "
+            f"Missing SPECIES_IDs: {missing}"
+        )
 ####################################################################################################
 
 ####################################################################################################
-def check_molwght_mech4import(molwght,mech4import,OUTPUT):
-    if OUTPUT=='VOC':
-        temp_mech = pd.merge(mech4import,molwght[['Species','SPEC_MW']],on='Species',how ='left').fillna(0) # append SPEC_MW
-        zero_MWs  = temp_mech.loc[temp_mech['SPEC_MW'] == 0.0]
-        zero_MWs  = zero_MWs.reset_index(drop=True) # reset index
-        if zero_MWs.empty:
-            pass
-        else:
-            print('Species are in mech4import but not in molwght. These include:')
-            print(zero_MWs.loc[:,'Species'])
-            sys.exit()
-    elif OUTPUT=='PM': pass
-    else: sys.exit('OUTPUT entered is not recognized. Only VOC and PM are allowed.')
+def check_molwght_mech4import(molwght: pd.DataFrame, mech4import: pd.DataFrame, OUTPUT: str) -> None:
+    """
+    When OUTPUT=='VOC', ensure all mechanism species in mech4import exist in molwght.
+    """
+    if OUTPUT == 'VOC':
+        _require_columns(molwght, ['Species'], 'molwght')
+        _require_columns(mech4import, ['Species'], 'mech4import')
+
+        mw_species = set(molwght['Species'])
+        mech_species = set(mech4import['Species'])
+
+        missing = sorted(mech_species - mw_species)
+        if missing:
+            raise ValueError(
+                "Species present in mech4import are missing from molwght. "
+                f"Missing species: {missing}"
+            )
+    elif OUTPUT == 'PM':
+        return
+    else:
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
 ####################################################################################################
 
 ####################################################################################################
-def check_species_mech4import(mech4import,species,MECH_BASIS):
-    spec_sum  = mech4import.groupby('SPECIES_ID',as_index=False)['Moles'].sum()  # Sum moles for each SPECIES_ID
-    temp_spec = pd.merge(species,spec_sum[['SPECIES_ID','Moles']],on='SPECIES_ID',how ='left').fillna(0) # append moles
-    zero_mol  = temp_spec.loc[temp_spec['Moles'] == 0.0]
-    zero_mol  = zero_mol.reset_index(drop=True) # reset index
-    if zero_mol.empty:
-        pass
+def check_species_mech4import(mech4import: pd.DataFrame, species: pd.DataFrame, MECH_BASIS: str, OUTPUT: str) -> None:
+    """
+    Ensure VOC species present in export_species are present in mech4import.
+    """
+    if OUTPUT == 'VOC':
+        _require_columns(mech4import, ['SPECIES_ID'], 'mech4import')
+        _require_columns(species, ['SPECIES_ID'], 'species')
+        
+        species_ids = set(species['SPECIES_ID'])
+        mech_species = set(mech4import['SPECIES_ID'])
+
+        missing = sorted(species_ids - mech_species)
+        if missing:
+            raise ValueError(
+                "Species are in export_species but not in mechanism_forImport . "
+                f"SPECIES_IDs: {missing}. For MECH_BASIS: {MECH_BASIS}"
+            )
+    elif OUTPUT == 'PM':
+        return
     else:
-        print('Species are in export_species but not in the mechanism_forImport file. These include:')
-        print(zero_mol.loc[:,'SPECIES_ID'])
-        print('For MECH_BASIS: '+MECH_BASIS)
-        sys.exit()
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
 ####################################################################################################
 
 ####################################################################################################
-def check_profiles_volatility(profiles,poa_volatility):
-    poa_copy  = poa_volatility.copy()
-    poa_copy['Total'] = poa_copy['-2'] + poa_copy['-1'] + poa_copy['0'] + poa_copy['1'] + poa_copy['2']
-    temp_prof = pd.merge(profiles,poa_copy,on=['CATEGORY_LEVEL_1_Generation_Mechanism','CATEGORY_LEVEL_2_Sector_Equipment'], \
-                         how ='left').fillna(0)
-    no_vol    = temp_prof.loc[temp_prof['Total'] == 0.0]
-    no_vol    = no_vol.reset_index(drop=True) # reset index
-    if no_vol.empty:
-        pass
+def check_profiles_volatility(profiles: pd.DataFrame, poa_volatility: pd.DataFrame, OUTPUT: str) -> None:
+    """
+    Ensure PM profiles have default OM volatility profiles based on L1 and L2 categories.
+    """
+    if OUTPUT == 'PM':
+        _require_columns(profiles, ['PROFILE_CODE',
+                                    'CATEGORY_LEVEL_1_Generation_Mechanism',
+                                    'CATEGORY_LEVEL_2_Sector_Equipment'], 'profiles')
+        _require_columns(poa_volatility, ['CATEGORY_LEVEL_1_Generation_Mechanism',
+                                          'CATEGORY_LEVEL_2_Sector_Equipment'], 'poa_volatility')
+        
+        l1, l2 = 'CATEGORY_LEVEL_1_Generation_Mechanism', 'CATEGORY_LEVEL_2_Sector_Equipment'
+
+        # Build sets of unique (L1, L2) pairs from each DataFrame
+        profiles_pairs = set(
+            profiles[[l1, l2]].drop_duplicates().itertuples(index=False, name=None)
+        )
+        volatility_pairs = set(
+            poa_volatility[[l1, l2]].drop_duplicates().itertuples(index=False, name=None)
+        )
+
+        missing_pairs = sorted(profiles_pairs - volatility_pairs)
+        if missing_pairs:
+            # Find which PROFILE_CODEs are impacted by the missing category pairs
+            missing_df = pd.DataFrame(missing_pairs, columns=[l1, l2])
+            affected = profiles.merge(missing_df, on=[l1, l2], how='inner')
+            affected_codes = sorted(affected['PROFILE_CODE'].unique().tolist())
+
+            raise ValueError(
+                "PM profiles have unspecified OM volatility in poa_volatility. "
+                f"Missing category pairs: {missing_pairs}. "
+                f"Affected PROFILE_CODEs: {affected_codes}. "
+            )
+    elif OUTPUT == 'VOC':
+        return
     else:
-        print('PM profiles are in export_profiles whose OM volatility is not specified in poa_volatility. These include:')
-        print(no_vol.loc[:,'PROFILE_CODE'])
-        sys.exit()
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
 ####################################################################################################
 
 ####################################################################################################
-def check_volatility(poa_volatility):
-    poa_copy  = poa_volatility.copy()
-    poa_copy['Total'] = poa_copy['-2'] + poa_copy['-1'] + poa_copy['0'] + poa_copy['1'] + poa_copy['2']
-    wrong_vol = poa_copy.loc[poa_copy['Total'] != 1.0]
-    wrong_vol = wrong_vol.reset_index(drop=True) # reset index
-    if wrong_vol.empty:
-        pass
+def check_volatility(poa_volatility: pd.DataFrame, OUTPUT: str, tol: float = 1e-6) -> None:
+    """
+    Ensure each category’s POA volatility bins sum to 1 within tolerance.
+    """
+    if OUTPUT == 'PM':
+        # Volatility bin columns used across checks
+        VOL_BIN_COLS = ['N2ALK', 'N1ALK', 'P0ALK', 'P1ALK', 'P2ALK','N2OXY8', 'N2OXY4', 'N2OXY2', 
+                        'N1OXY6', 'N1OXY3', 'N1OXY1','P0OXY4', 'P0OXY2', 'P1OXY3', 'P1OXY1', 'P2OXY2']
+    
+        _require_columns(poa_volatility, ['CATEGORY_LEVEL_1_Generation_Mechanism',
+                                          'CATEGORY_LEVEL_2_Sector_Equipment'], 'poa_volatility')
+        vol_bins = poa_volatility.reindex(columns=VOL_BIN_COLS, fill_value=0)
+        total = vol_bins.sum(axis=1)
+
+        ok = np.isclose(total.values, 1.0, atol=tol)
+        if not np.all(ok):
+            wrong = poa_volatility.loc[~ok, ['CATEGORY_LEVEL_1_Generation_Mechanism',
+                                             'CATEGORY_LEVEL_2_Sector_Equipment']].copy()
+            # Build readable labels
+            labels = (wrong['CATEGORY_LEVEL_1_Generation_Mechanism'].astype(str) + ', ' +
+                      wrong['CATEGORY_LEVEL_2_Sector_Equipment'].astype(str)).tolist()
+            raise ValueError(
+                "The POA volatility specified for some categories does not sum to 1 "
+                f"(tolerance={tol}). Categories: {labels}"
+            )
+    elif OUTPUT == 'VOC':
+        return
     else:
-        print('The POA volatility specified for some categories does not equal 1. These include:')
-        print(wrong_vol.loc[:,'CATEGORY_LEVEL_1_Generation_Mechanism']+', '+wrong_vol.loc[:,'CATEGORY_LEVEL_2_Sector_Equipment'])
-        sys.exit()
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
+####################################################################################################
+
+####################################################################################################
+def check_mech_in_mapping(poa_mapping: pd.DataFrame, MECH_BASIS: str, OUTPUT: str, 
+                          case_sensitive: bool = True, strip: bool = True) -> None:
+    """
+    Ensure MECH_BASIS features values in poa_mapping file.
+    """
+    if OUTPUT == 'PM':
+        cols = list(poa_mapping.columns)
+        cols = cols[3:]
+
+        # Normalize string-like column labels (ignore non-strings)
+        def _norm(x):
+            if not isinstance(x, str):
+                return x
+            s = x.strip() if strip else x
+            return s if case_sensitive else s.lower()
+
+        normalized_cols = [_norm(c) for c in cols]
+        target = _norm(MECH_BASIS)
+
+        if target not in normalized_cols:
+            # Show available columns as strings for a clear message
+            available = [str(c) for c in cols]
+            raise ValueError(
+                f"Mechanism '{MECH_BASIS}' is not present in poa_mapping file. "
+                f"Available columns: {available}"
+            )    
+    elif OUTPUT == 'VOC':
+        return
+    else:
+        raise ValueError("OUTPUT entered is not recognized. Only 'VOC' and 'PM' are allowed.")
 ####################################################################################################

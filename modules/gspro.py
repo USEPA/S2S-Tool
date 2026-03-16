@@ -10,405 +10,551 @@ today     = date.today()
 ####################################################################################################
 
 ####################################################################################################
-def gen_gspro_voc(profiles,species,species_props,molwght,mech4import,tbl_tox,MECH_BASIS,RUN_TYPE,TOLERANCE,TOX_IN,PRO_OUT):
+def gen_gspro_voc(profiles: pd.DataFrame, species: pd.DataFrame, molwght: pd.DataFrame, 
+                   mech4import: pd.DataFrame, tbl_tox: pd.DataFrame, MECH_BASIS: str, 
+                   RUN_TYPE: str, TOLERANCE: float, TOX_IN: str, PRO_OUT: str):
+
+    # Compute total weight per profile for tolerance check
+    total_wt = species.groupby('PROFILE_CODE', as_index=True)['WEIGHT_PERCENT'].sum()
+
+    # Tolerance check: sum should be within [100*(1-TOL), 100*(1+TOL)]
+    low, high = 100.0 * (1 - TOLERANCE), 100.0 * (1 + TOLERANCE)
+    valid_profiles = total_wt.index[(total_wt >= low) & (total_wt <= high)]
+
+    # Unique profiles list that pass tolerance
+    prof_codes = profiles['PROFILE_CODE'].unique()
+    prof_codes = pd.Index(prof_codes).intersection(valid_profiles)
+
+    # Filter species DataFrame for valid profiles and drop zero weights
+    sp = species.loc[species['PROFILE_CODE'].isin(prof_codes), ['PROFILE_CODE', 'SPECIES_ID', 'WEIGHT_PERCENT']].copy()
+    sp = sp.loc[sp['WEIGHT_PERCENT'] > 0.0]
+
+    # Normalize to fraction within each profile
+    sp['WEIGHT_PERCENT'] = sp['WEIGHT_PERCENT'] / sp.groupby('PROFILE_CODE')['WEIGHT_PERCENT'].transform('sum')
+
+    # Remove toxics for NOINTEGRATE / INTEGRATE
+    if RUN_TYPE in {'NOINTEGRATE', 'INTEGRATE'}:
+        tox_ids = set(tbl_tox['SPECIES_ID'].drop_duplicates().tolist())
+        sp = sp.loc[~sp['SPECIES_ID'].isin(tox_ids)]
+
+    # Normalize to fraction within each profile for CRITERIA and INTEGRATE
+    if RUN_TYPE in {'CRITERIA', 'INTEGRATE'}:
+        sp['WEIGHT_PERCENT'] = sp['WEIGHT_PERCENT'] / sp.groupby('PROFILE_CODE')['WEIGHT_PERCENT'].transform('sum')
+
+    # Compute sum per profile, drop and report profiles that are empty following pollutant integration
+    sum_by_profile = (sp.groupby('PROFILE_CODE')['WEIGHT_PERCENT'].sum()
+                    .reindex(prof_codes, fill_value=0.0))
+    empty_profiles = sum_by_profile.index[sum_by_profile.eq(0.0)]
+    keep_profiles  = sum_by_profile.index[sum_by_profile.gt(0.0)]
+
+    for pc in empty_profiles:
+         print(f'Profile "{pc}" is empty following pollutant integration and therefore not processed.')
+
+    sp = sp.loc[sp['PROFILE_CODE'].isin(keep_profiles)].copy()
+
+    # NMOG fraction per profile (exclude SPECIES_ID == 529; aka methane)
+    nmog_perc = sp.loc[sp['SPECIES_ID'] != 529].groupby('PROFILE_CODE')['WEIGHT_PERCENT'].sum()
+    nmog_perc = nmog_perc.reindex(prof_codes, fill_value=0.0)
+
+    # Set input pollutant name
+    i_poll = 'TOG' if RUN_TYPE in {'CRITERIA', 'NOINTEGRATE'} else TOX_IN
+
+    # mech_map: mech4import with model species MW attached (MW_model), per row
+    mech_map = mech4import.merge(molwght[['Species', 'SPEC_MW']], on='Species', how='left'
+                                 ).rename(columns={'SPEC_MW': 'MW_model'})
+
+    # Sum over mapping rows per compound SPECIES_ID
+    eff_mw_by_specid = (mech_map['Moles'] * mech_map['MW_model']).groupby(mech_map['SPECIES_ID']).sum()
+
+    # Inner-join is safe and avoids NaNs
+    sp_mech = sp.merge(mech_map[['SPECIES_ID', 'Species', 'Moles', 'MW_model']],
+                       on='SPECIES_ID',how='inner')
     
-    ### gscnv file columns
-    column_names  = ['PROFILE','INPUT.POLL','MODEL.SPECIES','MASS.FRACTION','MOLECULAR.WGHT','MASS.FRACTION1']
-    dfgspro       = pd.DataFrame(columns=column_names)
+    # Attach effective MW per compound SPECIES_ID
+    sp_mech['eff_MW'] = sp_mech['SPECIES_ID'].map(eff_mw_by_specid)
 
-    for i in range(len(profiles)):
-        prof      = profiles.loc[i,'PROFILE_CODE'] # target profile for this iteration
-        temp_spec = species.loc[species['PROFILE_CODE'] == prof] # pull target speciation profile
-        temp_spec = temp_spec.reset_index(drop=True) # reset index
-        
-        if temp_spec['WEIGHT_PERCENT'].sum() / 100 < (1 - TOLERANCE) or temp_spec['WEIGHT_PERCENT'].sum() / 100 > (1 + TOLERANCE):
-            print('Profile '+prof+' is outside the specified TOLERANCE and was not processed.')
-            continue
-        
-        if RUN_TYPE=='CRITERIA':
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-            i_poll    = 'TOG'
-            METHANE   = pd.Series(data={'SPECIES_ID':529})
-            nmog_perc = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(METHANE)] # pull target speciation profile minus METHANE
-            nmog_perc = nmog_perc['WEIGHT_PERCENT'].sum()
-        elif RUN_TYPE=='NOINTEGRATE':
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-            TOXLIST   = tbl_tox.loc[:,'SPECIES_ID'] # pull integrated SPECIES_ID list
-            TOXLIST   = TOXLIST.drop_duplicates() # drop duplicates
-            TOXLIST   = TOXLIST.reset_index(drop=True) # reset index
-            temp_spec = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(TOXLIST)] # pull target speciation profile minus TOXLIST
-            i_poll    = 'TOG'
-            METHANE   = pd.Series(data={'SPECIES_ID':529})
-            nmog_perc = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(METHANE)] # pull target speciation profile minus METHANE
-            nmog_perc = nmog_perc['WEIGHT_PERCENT'].sum()
-        else: # if RUN_TYPE=='INTEGRATE':
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-            TOXLIST   = tbl_tox.loc[:,'SPECIES_ID'] # pull integrated SPECIES_ID list
-            TOXLIST   = TOXLIST.drop_duplicates() # drop duplicates
-            TOXLIST   = TOXLIST.reset_index(drop=True) # reset index
-            temp_spec = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(TOXLIST)] # pull target speciation profile minus TOXLIST
-            i_poll    = TOX_IN
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-            METHANE   = pd.Series(data={'SPECIES_ID':529})
-            nmog_perc = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(METHANE)] # pull target speciation profile minus METHANE
-            nmog_perc = nmog_perc['WEIGHT_PERCENT'].sum()
+    # Calculate mole model species / mass VOC
+    sp_mech['moleSpec_massVOC'] = sp_mech['WEIGHT_PERCENT'] * sp_mech['Moles'] / sp_mech['eff_MW']
 
-        temp_spec = temp_spec.loc[temp_spec['WEIGHT_PERCENT'] > 0.0 ] # Remove species where WEIGHT_PERCENT == 0.0
+    grouped = sp_mech.groupby(['PROFILE_CODE', 'Species'], as_index=False).agg(
+        moleSpec_massVOC=('moleSpec_massVOC', 'sum'), MW_model=('MW_model', 'first'))
+    
+    # Final mass fractions for model species
+    grouped['MASS.FRACTION'] = grouped['moleSpec_massVOC'] * grouped['MW_model']
+    
+    dfgspro = grouped.rename(columns={'PROFILE_CODE': 'PROFILE', 'Species': 'MODEL.SPECIES',
+                                      'MW_model': 'MOLECULAR.WGHT'})
+    [['PROFILE', 'MODEL.SPECIES', 'MASS.FRACTION', 'MOLECULAR.WGHT']]
 
-        if temp_spec.empty:
-            print('Profile '+prof+' is empty following pollutant integration and therefore not processed.')
-            continue
+    # Add INPUT.POLL and MASS.FRACTION1
+    dfgspro.insert(1, 'INPUT.POLL', i_poll)
+    dfgspro['MASS.FRACTION1'] = dfgspro['MASS.FRACTION']
 
-        spec_list = temp_spec.loc[:,'SPECIES_ID'] # pull unique species in profile
-        temp_m4i  = mech4import.loc[mech4import['SPECIES_ID'].isin(spec_list)] # filter mech4import for spec_list
-        temp_m4i  = temp_m4i.reset_index(drop=True) # reset index
-        
-        temp_mw   = pd.merge(temp_m4i,molwght[['Species','SPEC_MW']],on='Species',how ='left') # append MolWght
-        temp_mw.loc[:,'SPEC_MW'] = temp_mw.loc[:,'Moles'] * temp_mw.loc[:,'SPEC_MW'] # calculate total MW per explicit species    
-        temp_mw  = temp_mw.groupby('SPECIES_ID',as_index=False)['SPEC_MW'].sum() # calculate effective MW for each compound
+    # Add NMOG
+    if MECH_BASIS != 'CB6R3_AE7_TRACER':
+        add = (nmog_perc.rename('MASS.FRACTION').rename_axis('PROFILE').reset_index())
+        add['INPUT.POLL'] = i_poll
+        add['MODEL.SPECIES'] = 'NMOG'
+        add['MOLECULAR.WGHT'] = 1.0
+        add['MASS.FRACTION1'] = add['MASS.FRACTION']
+        add = add[['PROFILE', 'INPUT.POLL', 'MODEL.SPECIES', 'MASS.FRACTION', 'MOLECULAR.WGHT', 'MASS.FRACTION1']]
+        dfgspro = pd.concat([dfgspro, add], ignore_index=True)
+    else: # Remove NONBAF from CB6R3_AE7_TRACER GSPROs
+        dfgspro = dfgspro.loc[dfgspro['MODEL.SPECIES'] != 'NONBAF']
 
-        temp_m4i  = pd.merge(temp_m4i,temp_mw[['SPECIES_ID','SPEC_MW']],on='SPECIES_ID',how ='left') # append MolWght
-        temp_m4i  = pd.merge(temp_m4i,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append Wght %
+    # Order columns and format numbers
+    dfgspro = dfgspro[['PROFILE', 'INPUT.POLL', 'MODEL.SPECIES', 'MASS.FRACTION', 'MOLECULAR.WGHT', 'MASS.FRACTION1']]
+    dfgspro['MASS.FRACTION']  = dfgspro['MASS.FRACTION'].astype(float).map(lambda x: f"{x:.6E}")
+    dfgspro['MOLECULAR.WGHT'] = dfgspro['MOLECULAR.WGHT'].astype(float).map(lambda x: f"{x:.6E}")
+    dfgspro['MASS.FRACTION1'] = dfgspro['MASS.FRACTION1'].astype(float).map(lambda x: f"{x:.6E}")
 
-        temp_m4i.loc[:,'moleSpec_massVOC'] = temp_m4i.loc[:,'WEIGHT_PERCENT'] * temp_m4i.loc[:,'Moles'] / \
-                                             temp_m4i.loc[:,'SPEC_MW'] # calculate mole model species / mass VOC
-
-        molesplit = temp_m4i.groupby('Species',as_index=False)['moleSpec_massVOC'].sum() # calculate total mole model species / mass VOC
-        molesplit = pd.merge(molesplit,molwght[['Species','SPEC_MW']],on='Species',how ='left') # append MolWght
-
-        molesplit.loc[:,'MASS.FRACTION']  = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'SPEC_MW'] # calculate final split factors
-        molesplit.loc[:,'MASS.FRACTION1'] = molesplit.loc[:,'moleSpec_massVOC'] * molesplit.loc[:,'SPEC_MW'] # calculate final split factors
-        molesplit.loc[:,'PROFILE']        = prof # add profile to dataframe
-        molesplit.loc[:,'INPUT.POLL']     = i_poll # add input pollutant to dataframe
-        molesplit = molesplit.rename(columns={'Species': 'MODEL.SPECIES'}) # rename Species column
-        molesplit = molesplit.rename(columns={'SPEC_MW': 'MOLECULAR.WGHT'}) # rename frac_modSpec_MW column
-        molesplit = molesplit.drop(['moleSpec_massVOC'],axis=1) # drop moleSpec_massVOC column
-        molesplit = molesplit[column_names] # reorder columns
-        
-        if nmog_perc == 0.0:
-            pass
-        else:
-            if MECH_BASIS == 'CB6R3_AE7_TRACER': # do not add NMOG to CB6R3_AE7_TRACER GSPRO; double counts mass
-                pass
-            else:
-                nmog = pd.Series(data={'PROFILE':prof,'INPUT.POLL':i_poll,'MODEL.SPECIES':'NMOG','MASS.FRACTION':nmog_perc,\
-                                       'MOLECULAR.WGHT':1,'MASS.FRACTION1':nmog_perc})
-                molesplit = molesplit.append(nmog,ignore_index=True)
-
-        if MECH_BASIS == 'CB6R3_AE7_TRACER': # remove NONBAF from CB6R3_AE7_TRACER GSPROs
-            NONBAF = pd.Series(data={'MODEL.SPECIES':'NONBAF'})
-            molesplit = molesplit.loc[~molesplit['MODEL.SPECIES'].isin(NONBAF)] # remove NONBAF from profile
-        else: pass
-
-        dfgspro   = dfgspro.append(molesplit) # append profile gspro to final gspro
-
-    dfgspro['MASS.FRACTION']  = dfgspro['MASS.FRACTION'].astype(float).apply(lambda x: '%.6E' % x)
-    dfgspro['MOLECULAR.WGHT'] = dfgspro['MOLECULAR.WGHT'].astype(float).apply(lambda x: '%.6E' % x)
-    dfgspro['MASS.FRACTION1'] = dfgspro['MASS.FRACTION1'].astype(float).apply(lambda x: '%.6E' % x)
-
-    ### Output gspro df to file
-    dfgspro.to_csv(PRO_OUT,index=False,header=False)
+    # Write
+    dfgspro = dfgspro.sort_values(['PROFILE'], kind='mergesort').reset_index(drop=True) # Ordered by Profile
+    dfgspro.to_csv(PRO_OUT, index=False, header=False)
 ####################################################################################################
 
 ####################################################################################################
-def gen_gspro_pm(profiles,species,species_props,mechPM,tbl_tox,poa_volatility,poa_mapping,camx_fcrs,oxygen_metals,MECH_BASIS,RUN_TYPE,AQM,TOX_IN,PRO_OUT):
+def build_pm_ready_profile(p: pd.Series, temp_spec: pd.DataFrame, oxygen_metals: pd.DataFrame) -> pd.DataFrame:
+    """
+    Translate a base SPECIATE PM profile (ptype == 'PM') into a 'PM-ready' profile.
+
+    Parameters
+    ----------
+    p : pd.Series
+        Row from the profiles DataFrame for the current profile. Must include
+        PROFILE_CODE, CATEGORY_LEVEL_1_Generation_Mechanism, CATEGORY_LEVEL_2_Sector_Equipment.
+    temp_spec : pd.DataFrame
+        Species rows for the current PROFILE_CODE with columns ['PROFILE_CODE','SPECIES_ID','WEIGHT_PERCENT'].
+        WEIGHT_PERCENT is expected to be percent values (sum near 100).
+    oxygen_metals : pd.DataFrame
+        DataFrame with metal oxygen ratios. Must include columns ['SPECIES_ID', 'oxy/metal_ratio'].
+
+    Returns
+    -------
+    pd.DataFrame
+        A PM-ready species DataFrame with columns ['PROFILE_CODE','SPECIES_ID','WEIGHT_PERCENT'].
+        WEIGHT_PERCENT is in percent (not fraction), potentially renormalized.
+    """
+    prof = p['PROFILE_CODE']  # Pull profile code
+    l1   = p['CATEGORY_LEVEL_1_Generation_Mechanism']  # Pull L1 category
+    l2   = p['CATEGORY_LEVEL_2_Sector_Equipment']  # Pull L2 category
+
+    # Hardcoded list of "PM-ready" species IDs
+    pm_ready_ids = [
+        626, 797, 699, 700, 613, 784, 2669, 488, 292, 694, 715, 2303, 329, 2772, 525, 2302, 669, 526, 785,
+        696, 337, 795, 2668, 2671, 666, 767, 347, 379, 612, 380, 778, 468, 298, 693, 689, 697, 779, 586,
+        649, 695, 328, 487, 714, 296, 300, 519, 1861, 528, 520, 2670]
     
-    ### gscnv file columns
+    temp_pm = pd.DataFrame({'PROFILE_CODE': prof, 'SPECIES_ID': pm_ready_ids})
+    temp_pm = temp_pm.merge(temp_spec[['SPECIES_ID', 'WEIGHT_PERCENT']], on='SPECIES_ID', how='left')
+    temp_pm['WEIGHT_PERCENT'] = temp_pm['WEIGHT_PERCENT'].fillna(0.0)
+
+    # Helpers
+    def get_w(spec_id: int) -> float:
+        return float(temp_pm.loc[temp_pm['SPECIES_ID'] == spec_id, 'WEIGHT_PERCENT'].iloc[0])
+
+    def set_w(spec_id: int, value: float) -> None:
+        temp_pm.loc[temp_pm['SPECIES_ID'] == spec_id, 'WEIGHT_PERCENT'] = float(value)
+
+    # If ionic species present, zero out the elemental counterpart
+    if get_w(2303) > 0.0:  # Ca++ present
+        set_w(329, 0.0)    # zero Ca
+    if get_w(2772) > 0.0:  # Mg++ present
+        set_w(525, 0.0)    # zero Mg
+    if get_w(2302) > 0.0:  # K+ present
+        set_w(669, 0.0)    # zero K
+    if get_w(785) > 0.0:   # Na+ present
+        set_w(696, 0.0)    # zero Na
+    if get_w(337) > 0.0:   # Cl- present
+        set_w(795, 0.0)    # zero Cl
+
+    # Particulate water (PH2O, SPECIES_ID 2668)
+    if l1 in ('Combustion', 'Miscellaneous'):
+        ph2o = (get_w(699) + get_w(784)) * 0.24
+        set_w(2668, ph2o)
+    else:
+        set_w(2668, 0.0)
+
+    # PSO4 from S if needed (699 = PSO4, 700 = S)
+    if get_w(699) > 0.0:
+        pass
+    elif get_w(700) == 0.0:
+        pass
+    else:
+        # Convert S to PSO4 (molecular weight ratio: 96/32)
+        set_w(699, get_w(700) * (96.0 / 32.0))
+    set_w(700, 0.0)
+
+    # Metal-bound oxygen (MO, SPECIES_ID 2670)
+    om_temp = oxygen_metals.merge(temp_pm[['SPECIES_ID', 'WEIGHT_PERCENT']],
+                                  on='SPECIES_ID',how='left')
+    om_temp['WEIGHT_PERCENT'] = om_temp['WEIGHT_PERCENT'].fillna(0.0)
+
+    # For pairs (elemental vs ionic), if either is absent (0), set both to 0 to avoid negative oxygen calc
+    # 329 (Ca) vs 2303 (Ca++)
+    if get_w(329) == 0.0 or get_w(2303) == 0.0:
+        om_temp.loc[om_temp['SPECIES_ID'].isin([329, 2303]), 'WEIGHT_PERCENT'] = 0.0
+    # 669 (K) vs 2302 (K+)
+    if get_w(669) == 0.0 or get_w(2302) == 0.0:
+        om_temp.loc[om_temp['SPECIES_ID'].isin([669, 2302]), 'WEIGHT_PERCENT'] = 0.0
+    # 525 (Mg) vs 2772 (Mg++)
+    if get_w(525) == 0.0 or get_w(2772) == 0.0:
+        om_temp.loc[om_temp['SPECIES_ID'].isin([525, 2772]), 'WEIGHT_PERCENT'] = 0.0
+    # 696 (Na) vs 785 (Na+)
+    if get_w(696) == 0.0 or get_w(785) == 0.0:
+        om_temp.loc[om_temp['SPECIES_ID'].isin([696, 785]), 'WEIGHT_PERCENT'] = 0.0
+
+    # Subtract ionic from elemental for oxygen calc
+    def subtract_pair(elem: int, ion: int):
+        e = float(om_temp.loc[om_temp['SPECIES_ID'] == elem, 'WEIGHT_PERCENT'].iloc[0])
+        i = float(om_temp.loc[om_temp['SPECIES_ID'] == ion, 'WEIGHT_PERCENT'].iloc[0])
+        v = max(e - i, 0.0)
+        om_temp.loc[om_temp['SPECIES_ID'] == elem, 'WEIGHT_PERCENT'] = v
+
+    subtract_pair(329, 2303)  # Ca - Ca++
+    subtract_pair(669, 2302)  # K  - K+
+    subtract_pair(525, 2772)  # Mg - Mg++
+    subtract_pair(696, 785)   # Na - Na+
+
+    # Compute unadjusted MO: sum(oxy/metal_ratio * metal_weight)
+    if 'oxy/metal_ratio' not in om_temp.columns:
+        raise ValueError("oxygen_metals must include column 'oxy/metal_ratio'")
+    MOunadjusted = float((om_temp['oxy/metal_ratio'] * om_temp['WEIGHT_PERCENT']).sum())
+
+    # Adjust MO for non-neutralized sulfate (based on NH4 and PSO4)
+    NeutralizedSO4    = (0.5 * 96.0 / 18.0) * get_w(784)  # based on NH4 weight
+    NonNeutralizedSO4 = get_w(699) - NeutralizedSO4
+    if NonNeutralizedSO4 > 0.0:
+        MOadjusted = MOunadjusted - NonNeutralizedSO4 * (16.0 / 96.0)
+    else:
+        MOadjusted = MOunadjusted
+    MOadjusted = max(MOadjusted, 0.0)
+    set_w(2670, MOadjusted)  # MO
+
+    # PNCOM (SPECIES_ID 2669) additions by sector
+    l2_lower = str(l2).lower()
+    if 'mobile' in l2_lower:
+        set_w(2669, get_w(626) * 0.25)
+    elif 'biomass burning' in l2_lower:
+        set_w(2669, get_w(626) * 0.7)
+    else:
+        set_w(2669, get_w(626) * 0.4)
+        
+    # Keep only positive weights
+    temp_pm = temp_pm.loc[temp_pm['WEIGHT_PERCENT'] > 0.0].copy()
+
+    # Renormalize if sum exceeds 101%
+    s = float(temp_pm['WEIGHT_PERCENT'].sum())
+    if s > 101.0:
+        temp_pm['WEIGHT_PERCENT'] = temp_pm['WEIGHT_PERCENT'] / s * 100.0
+
+    temp_pm.reset_index(drop=True, inplace=True)
+
+    return temp_pm[['PROFILE_CODE', 'SPECIES_ID', 'WEIGHT_PERCENT']]
+####################################################################################################
+
+####################################################################################################
+def gen_gspro_pm(profiles,species,mechPM,tbl_tox,poa_volatility,poa_mapping,camx_fcrs,oxygen_metals,MECH_BASIS,RUN_TYPE,AQM,TOX_IN,PRO_OUT):
+    
+    ### gspro file columns
     column_names  = ['PROFILE','INPUT.POLL','MODEL.SPECIES','MASS.FRACTION','MOLECULAR.WGHT','MASS.FRACTION1']
     dfgspro       = pd.DataFrame(columns=column_names)
-    
+
+    TOXLIST = set(tbl_tox['SPECIES_ID'].drop_duplicates().tolist()) # pull integrated SPECIES_ID list
+    is_camx = (AQM == 'CAMX')
+    is_cmaq = (AQM == 'CMAQ')
+
+    # Set a weight for a species by name or SPECIES_ID
+    def set_weight(temp_mech: pd.DataFrame, key, value, by: str = 'Species'):
+        temp_mech.loc[temp_mech[by] == key, 'WEIGHT_PERCENT'] = float(value)
+        
     for i in range(len(profiles)):
-        prof      = profiles.loc[i,'PROFILE_CODE'] # target profile for this iteration
-        temp_spec = species.loc[species['PROFILE_CODE'] == prof] # pull target speciation profile
-        temp_spec = temp_spec.reset_index(drop=True) # reset index
-        
-    ### if PROFILE_TYPE == PM, translate data into a "PM-ready" profile.
-        if profiles.loc[i,'PROFILE_TYPE'] == 'PM': # if PROFILE_TYPE == PM, translate data into a "PM-ready" profile.
-            #continue
-            temp_spec_pm  = pd.DataFrame(columns=['PROFILE_CODE','SPECIES_ID']) # setup temp_spec_pm array
-            temp_spec_pm['SPECIES_ID']   = [626,797,699,700,613,784,2669,488,292,694,715,2303,329,2772,525,2302,669,526,785,696,337,795,\
-                                            2668,2671,666,767,347,379,612,380,778,468,298,693,689,697,779,586,649,695,328,487,\
-                                            714,296,300,519,1861,528,520,2670] # hardcode "PM-ready" species
-            temp_spec_pm['PROFILE_CODE'] = prof # assign PROFILE_CODE
-            temp_spec_pm  = pd.merge(temp_spec_pm,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append WEIGHT_PERCENT
-            temp_spec_pm['WEIGHT_PERCENT'] = temp_spec_pm['WEIGHT_PERCENT'].fillna(0) # replace all NaN with zeros
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = 0.0
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'] = 0.0
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'] = 0.0
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'] = 0.0
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 337, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 795, 'WEIGHT_PERCENT'] = 0.0
-            # Add particulate water, PH2O
-            if profiles.loc[i,'CATEGORY_LEVEL_1_Generation_Mechanism'] == 'Combustion' or profiles.loc[i,'CATEGORY_LEVEL_1_Generation_Mechanism'] == 'Miscellaneous':
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2668, 'WEIGHT_PERCENT'] = (temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 699, 'WEIGHT_PERCENT'].iloc[0] + \
-                                                                                          temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 784, 'WEIGHT_PERCENT'].iloc[0]) * 0.24
-            else:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2668, 'WEIGHT_PERCENT'] = 0.0
-            # Add PSO4 from sulfur, if necessary
-            if temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 699, 'WEIGHT_PERCENT'].iloc[0] > 0:
-                pass
-            elif temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 700, 'WEIGHT_PERCENT'].iloc[0] == 0:
-                pass
-            else:
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 699, 'WEIGHT_PERCENT'] = temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 700, 'WEIGHT_PERCENT'].iloc[0] * (96/32)
-            temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 700, 'WEIGHT_PERCENT'] = 0
-            # Add MO, metal bound oxygen, if necessary
-            oxygen_metals_temp  = pd.merge(oxygen_metals,temp_spec_pm[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append WEIGHT_PERCENT
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0] == 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = 0.0
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0] == 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'] = 0.0
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0] == 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'] = 0.0
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0] == 0 or \
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] == 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'] = 0.0
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'] = 0.0
-            oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] - \
-                                                                                      oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0]
-            oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'] = oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0] - \
-                                                                                      oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0]
-            oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'] = oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0] - \
-                                                                                      oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0]
-            oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'] = oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0] - \
-                                                                                      oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0]
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0] <= 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0] <= 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0] <= 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'] = 0.0
-            if oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0] <= 0:
-                oxygen_metals_temp.loc[oxygen_metals_temp['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'] = 0.0
-            oxygen_metals_temp['MOunadjusted'] = oxygen_metals_temp['oxy/metal_ratio'] * oxygen_metals_temp['WEIGHT_PERCENT'] # Calculate MOunadjusted                
-            MOunadjusted = oxygen_metals_temp['MOunadjusted'].sum()
-            NeutralizedSO4 = (0.5 * 96 / 18) * temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 784, 'WEIGHT_PERCENT'].iloc[0]
-            NonNeutralizedSO4 = temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 699, 'WEIGHT_PERCENT'].iloc[0] - NeutralizedSO4
-            if NonNeutralizedSO4 <= 0:
-                MOadjusted = MOunadjusted
-            else:
-                MOadjusted = MOunadjusted - NonNeutralizedSO4 * (16 / 96)
-            if MOadjusted <= 0:
-                MOadjusted = 0.0
-            else: pass
-            temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2670, 'WEIGHT_PERCENT'] = MOadjusted
-            # Add PNCOM, if necessary
-            if 'mobile' in profiles.loc[i,'CATEGORY_LEVEL_2_Sector_Equipment'].lower():
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2669, 'WEIGHT_PERCENT'] = temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 626, 'WEIGHT_PERCENT'].iloc[0] * 0.25
-            elif 'biomass burning' in profiles.loc[i,'CATEGORY_LEVEL_2_Sector_Equipment'].lower():
-                temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 2669, 'WEIGHT_PERCENT'] = temp_spec_pm.loc[temp_spec_pm['SPECIES_ID'] == 626, 'WEIGHT_PERCENT'].iloc[0] * 0.7
-            else:
-                pass
-            temp_spec_pm  = temp_spec_pm.loc[temp_spec_pm['WEIGHT_PERCENT'] > 0.0 ] # Remove species where WEIGHT_PERCENT == 0.0
-            # Renormalize, if necessary
-            if temp_spec_pm['WEIGHT_PERCENT'].sum() > 101.0:
-                temp_spec_pm['WEIGHT_PERCENT'] = temp_spec_pm['WEIGHT_PERCENT'] / temp_spec_pm['WEIGHT_PERCENT'].sum() * 100 # Renormalize Wght%
-            else:
-                pass
-            temp_spec = temp_spec_pm
+        p     = profiles.iloc[i]
+        prof  = p['PROFILE_CODE']
+        ptype = p['PROFILE_TYPE']
+        l1    = p['CATEGORY_LEVEL_1_Generation_Mechanism']
+        l2    = p['CATEGORY_LEVEL_2_Sector_Equipment']
 
-        if RUN_TYPE=='CRITERIA':
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / 100  # Sum of Wght% = 1
-            i_poll    = 'PM2_5'
-        else: # if RUN_TYPE=='INTEGRATE':
-            TOXLIST   = tbl_tox.loc[:,'SPECIES_ID'] # pull integrated SPECIES_ID list
-            TOXLIST   = TOXLIST.drop_duplicates() # drop duplicates
-            TOXLIST   = TOXLIST.reset_index(drop=True) # reset index
-            temp_spec = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(TOXLIST)] # pull target speciation profile minus TOXLIST
-            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-            i_poll    = TOX_IN
-        
-        temp_mech = pd.merge(mechPM,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append WEIGHT_PERCENT
-        temp_mech['WEIGHT_PERCENT'] = temp_mech['WEIGHT_PERCENT'].fillna(0) # replace all NaN with zeros
+        # Pull target speciation profile
+        temp_spec = species.loc[species['PROFILE_CODE'] == prof].copy().reset_index(drop=True)
 
-        poa_mech  = pd.merge(poa_mapping,temp_spec[['SPECIES_ID','WEIGHT_PERCENT']],on='SPECIES_ID',how ='left') # append WEIGHT_PERCENT
-        poa_mech['WEIGHT_PERCENT'] = poa_mech['WEIGHT_PERCENT'].fillna(0) # replace all NaN with zeros
-        poa_mech  = poa_mech.loc[poa_mech['WEIGHT_PERCENT'] > 0.0 ] # Remove species where WEIGHT_PERCENT == 0.0
-        poa_mech  = poa_mech.reset_index(drop=True) # reset index
-        
-        ### Extract SV-POA profile assigned to source type
-        temp_poa  = poa_volatility.loc[(poa_volatility['CATEGORY_LEVEL_1_Generation_Mechanism']==profiles.loc[i,'CATEGORY_LEVEL_1_Generation_Mechanism']) & \
-                                       (poa_volatility['CATEGORY_LEVEL_2_Sector_Equipment']==profiles.loc[i,'CATEGORY_LEVEL_2_Sector_Equipment'])]
-        temp_poa  = temp_poa.reset_index(drop=True) # reset index
+        # Translate data into a "PM-ready" profile
+        if ptype == 'PM':
+            temp_spec = build_pm_ready_profile(p, temp_spec, oxygen_metals)
 
-        ### Process OM/OC/NCOM from temp_spec for appropriate MECH_BASIS
+        # Integrate vs criteria normalization
+        if RUN_TYPE == 'CRITERIA':
+            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / 100.0
+            i_poll = 'PM2_5'
+        else: # if RUN_TYPE=='INTEGRATE'
+            # # pull target speciation profile minus TOXLIST
+            temp_spec = temp_spec.loc[~temp_spec['SPECIES_ID'].isin(TOXLIST)].copy()
+            # Renormalize Wght%
+            temp_spec['WEIGHT_PERCENT'] = temp_spec['WEIGHT_PERCENT'] / temp_spec['WEIGHT_PERCENT'].sum()
+            i_poll = TOX_IN
+
+        # Append WEIGHT_PERCENT and then replace all NaN with zeros
+        temp_mech = mechPM.merge(temp_spec[['SPECIES_ID', 'WEIGHT_PERCENT']].drop_duplicates(),
+                                 on='SPECIES_ID', how='left')
+        temp_mech['WEIGHT_PERCENT'] = temp_mech['WEIGHT_PERCENT'].fillna(0.0)
+
+        # Append WEIGHT_PERCENT, replace all NaN with zeros, 
+        # remove species where WEIGHT_PERCENT == 0.0, and calculate total POA weight percent
+        poa_mech = poa_mapping.merge(temp_spec[['SPECIES_ID', 'WEIGHT_PERCENT']].drop_duplicates(),
+                                     on='SPECIES_ID', how='left').fillna({'WEIGHT_PERCENT': 0.0})
+        poa_mech = poa_mech.loc[poa_mech['WEIGHT_PERCENT'] > 0.0].reset_index(drop=True)
+        poa_total = float(poa_mech['WEIGHT_PERCENT'].sum())
+
+        # Extract SV-POA profile assigned to source type
+        temp_poa = poa_volatility.loc[(poa_volatility['CATEGORY_LEVEL_1_Generation_Mechanism'] == l1) &
+                                      (poa_volatility['CATEGORY_LEVEL_2_Sector_Equipment'] == l2)
+                                      ].reset_index(drop=True)
+        
+        # Mechanism-specific mapping of OM/OC/NCOM from temp_spec
         if MECH_BASIS == 'PM-AE6':
-            if profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE6' or profiles.loc[i,'PROFILE_TYPE'] == 'PM':
-                pass # OC/PNCOM already appropriately mapped in base profile.
-            
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE8':
-                temp_mech.loc[temp_mech['Species'] == 'POC', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC', 'WEIGHT_PERCENT'].sum() # add POC
-                temp_mech.loc[temp_mech['Species'] == 'PNCOM', 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum() # add PNCOM
-            
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-CR1':
-                temp_mech.loc[temp_mech['Species'] == 'POC', 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * 1 / \
-                                                                                 profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'] # add POC
-                temp_mech.loc[temp_mech['Species'] == 'PNCOM', 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * (1 - 1 / \
-                                                                                   profiles.loc[i,'ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO']) # add PNCOM
-            else: sys.exit('PROFILE_TYPE = '+profiles.loc[i,'PROFILE_TYPE']+' for profile '+prof+' is not recognized.')
+            if ptype in ('PM-AE6', 'PM'):
+                pass  # OC/PNCOM already appropriately mapped in base profile
+            elif ptype == 'PM-AE8':
+                set_weight(temp_mech, 'POC', poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC',   'WEIGHT_PERCENT'].sum(), by='Species') # add POC
+                set_weight(temp_mech, 'PNCOM', poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum(), by='Species') # add PNCOM
+            elif ptype in ('PM-CR1', 'PM-CR2'):
+                if poa_total > 0.0:
+                    ratio = float(p['ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'])
+                    set_weight(temp_mech, 'POC',   poa_total * (1.0 / ratio), by='Species')
+                    set_weight(temp_mech, 'PNCOM', poa_total * (1.0 - 1.0 / ratio), by='Species')
+            else:
+                sys.exit(f'PROFILE_TYPE = {ptype} for profile {prof} is not recognized.')
 
         elif MECH_BASIS == 'PM-CR1':
-            if profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE6' or profiles.loc[i,'PROFILE_TYPE'] == 'PM':
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3394., 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * temp_poa.loc[:,'-2'][0] # add POCN2
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3395., 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * temp_poa.loc[:,'-1'][0] # add POCN1
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3396., 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * temp_poa.loc[:,'0'][0] # add POCP0
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3397., 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * temp_poa.loc[:,'1'][0] # add POCP1
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3398., 'WEIGHT_PERCENT'] = poa_mech.loc[:,'WEIGHT_PERCENT'].sum() * temp_poa.loc[:,'2'][0] # add POCP2
+            if ptype in ('PM-AE6', 'PM'):
+                A_N2 = float(temp_poa['N2ALK'].iat[0] + temp_poa['N2OXY8'].iat[0] + temp_poa['N2OXY4'].iat[0] + temp_poa['N2OXY2'].iat[0])
+                A_N1 = float(temp_poa['N1ALK'].iat[0] + temp_poa['N1OXY6'].iat[0] + temp_poa['N1OXY3'].iat[0] + temp_poa['N1OXY1'].iat[0])
+                A_P0 = float(temp_poa['P0ALK'].iat[0] + temp_poa['P0OXY4'].iat[0] + temp_poa['P0OXY2'].iat[0])
+                A_P1 = float(temp_poa['P1ALK'].iat[0] + temp_poa['P1OXY3'].iat[0] + temp_poa['P1OXY1'].iat[0])
+                A_P2 = float(temp_poa['P2ALK'].iat[0] + temp_poa['P2OXY2'].iat[0])
+                # Allocate by SPECIES_ID
+                set_weight(temp_mech, 3394., poa_total * A_N2, by='SPECIES_ID')  # AROCN2ALK
+                set_weight(temp_mech, 3395., poa_total * A_N1, by='SPECIES_ID')  # AROCN1ALK
+                set_weight(temp_mech, 3396., poa_total * A_P0, by='SPECIES_ID')  # AROCP0ALK
+                set_weight(temp_mech, 3397., poa_total * A_P1, by='SPECIES_ID')  # AROCP1ALK
+                set_weight(temp_mech, 3398., poa_total * A_P2, by='SPECIES_ID')  # AROCP2ALK
 
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-AE8':
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3394., 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -2, 'WEIGHT_PERCENT'].sum() # add POCN2
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3395., 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == -1, 'WEIGHT_PERCENT'].sum() # add POCN1
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3396., 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 0, 'WEIGHT_PERCENT'].sum() # add POCP0
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3397., 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 1, 'WEIGHT_PERCENT'].sum() # add POCP1
-                temp_mech.loc[temp_mech['SPECIES_ID'] == 3398., 'WEIGHT_PERCENT'] = poa_mech.loc[poa_mech['log10Cstar'] == 2, 'WEIGHT_PERCENT'].sum() # add POCP2
+            elif ptype == 'PM-AE8':
+                # AE8 bins mapped to SPECIES_IDs
+                set_weight(temp_mech, 3394., poa_mech.loc[poa_mech['log10Cstar'] == -2, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3395., poa_mech.loc[poa_mech['log10Cstar'] == -1, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3396., poa_mech.loc[poa_mech['log10Cstar'] ==  0, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3397., poa_mech.loc[poa_mech['log10Cstar'] ==  1, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3398., poa_mech.loc[poa_mech['log10Cstar'] ==  2, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+
+            elif ptype == 'PM-CR1':
+                pass  # Already mapped
+
+            elif ptype == 'PM-CR2':
+                # Use AE8-style bins for CR2 profile
+                set_weight(temp_mech, 3394., poa_mech.loc[poa_mech['log10Cstar'] == -2, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3395., poa_mech.loc[poa_mech['log10Cstar'] == -1, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3396., poa_mech.loc[poa_mech['log10Cstar'] ==  0, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3397., poa_mech.loc[poa_mech['log10Cstar'] ==  1, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+                set_weight(temp_mech, 3398., poa_mech.loc[poa_mech['log10Cstar'] ==  2, 'WEIGHT_PERCENT'].sum(), by='SPECIES_ID')
+            else:
+                sys.exit(f'PROFILE_TYPE = {ptype} for profile {prof} is not recognized.')
+
+        elif MECH_BASIS == 'PM-CR2':
+            if ptype in ('PM-AE6', 'PM'):
+                # Direct allocation by volatility bins
+                set_weight(temp_mech, 3394., poa_total * float(temp_poa['N2ALK'].iat[0]),  by='SPECIES_ID') # add AROCN2ALK
+                set_weight(temp_mech, 3395., poa_total * float(temp_poa['N1ALK'].iat[0]),  by='SPECIES_ID') # add AROCN1ALK
+                set_weight(temp_mech, 3396., poa_total * float(temp_poa['P0ALK'].iat[0]),  by='SPECIES_ID') # add AROCP0ALK
+                set_weight(temp_mech, 3397., poa_total * float(temp_poa['P1ALK'].iat[0]),  by='SPECIES_ID') # add AROCP1ALK
+                set_weight(temp_mech, 3398., poa_total * float(temp_poa['P2ALK'].iat[0]),  by='SPECIES_ID') # add AROCP2ALK
+
+                set_weight(temp_mech, 3524., poa_total * float(temp_poa['N2OXY8'].iat[0]), by='SPECIES_ID') # add AROCN2OXY8
+                set_weight(temp_mech, 3523., poa_total * float(temp_poa['N2OXY4'].iat[0]), by='SPECIES_ID') # add AROCN2OXY4
+                set_weight(temp_mech, 3522., poa_total * float(temp_poa['N2OXY2'].iat[0]), by='SPECIES_ID') # add AROCN2OXY2
+                set_weight(temp_mech, 3527., poa_total * float(temp_poa['N1OXY6'].iat[0]), by='SPECIES_ID') # add AROCN1OXY6
+                set_weight(temp_mech, 3526., poa_total * float(temp_poa['N1OXY3'].iat[0]), by='SPECIES_ID') # add AROCN1OXY3
+                set_weight(temp_mech, 3525., poa_total * float(temp_poa['N1OXY1'].iat[0]), by='SPECIES_ID') # add AROCN1OXY1
+
+                set_weight(temp_mech, 3529., poa_total * float(temp_poa['P0OXY4'].iat[0]), by='SPECIES_ID') # add AROCP0OXY4
+                set_weight(temp_mech, 3528., poa_total * float(temp_poa['P0OXY2'].iat[0]), by='SPECIES_ID') # add AROCP0OXY2
+                set_weight(temp_mech, 3531., poa_total * float(temp_poa['P1OXY3'].iat[0]), by='SPECIES_ID') # add AROCP1OXY3
+                set_weight(temp_mech, 3530., poa_total * float(temp_poa['P1OXY1'].iat[0]), by='SPECIES_ID') # add AROCP1OXY1
+                set_weight(temp_mech, 3532., poa_total * float(temp_poa['P2OXY2'].iat[0]), by='SPECIES_ID') # add AROCP2OXY2
+
+            elif ptype == 'PM-AE8':
+                def split_to(id_map, family_cols):
+                    fam_total = float(sum(float(temp_poa[c].iat[0]) for c in family_cols))
+                    weight = poa_mech.loc[poa_mech['log10Cstar'] == id_map['cstar'], 'WEIGHT_PERCENT'].sum()
+                    if fam_total > 0.0 and weight > 0.0:
+                        for spec_id, col in id_map['targets']:
+                            frac = float(temp_poa[col].iat[0]) / fam_total
+                            set_weight(temp_mech, spec_id, weight * frac, by='SPECIES_ID')
+
+                # N2 family
+                split_to({'cstar': -2, 'targets': [(3394., 'N2ALK'), (3524., 'N2OXY8'), (3523., 'N2OXY4'), (3522., 'N2OXY2')]},
+                         ['N2ALK', 'N2OXY8', 'N2OXY4', 'N2OXY2'])
+                # N1 family
+                split_to({'cstar': -1, 'targets': [(3395., 'N1ALK'), (3527., 'N1OXY6'), (3526., 'N1OXY3'), (3525., 'N1OXY1')]},
+                         ['N1ALK', 'N1OXY6', 'N1OXY3', 'N1OXY1'])
+                # P0 family
+                split_to({'cstar': 0, 'targets': [(3396., 'P0ALK'), (3529., 'P0OXY4'), (3528., 'P0OXY2')]},
+                         ['P0ALK', 'P0OXY4', 'P0OXY2'])
+                # P1 family
+                split_to({'cstar': 1, 'targets': [(3397., 'P1ALK'), (3531., 'P1OXY3'), (3530., 'P1OXY1')]},
+                         ['P1ALK', 'P1OXY3', 'P1OXY1'])
+                # P2 family
+                split_to({'cstar': 2, 'targets': [(3398., 'P2ALK'), (3532., 'P2OXY2')]},
+                         ['P2ALK', 'P2OXY2'])
+
+            elif ptype == 'PM-CR1':
+                pass  # already mapped in base profile
                 
-            elif profiles.loc[i,'PROFILE_TYPE'] == 'PM-CR1':
-                pass # SV-POA already appropriately mapped in base profile.
-            
-            else: sys.exit('PROFILE_TYPE = '+profiles.loc[i,'PROFILE_TYPE']+' for profile '+prof+' is not recognized.')
-        
-        else: sys.exit('MECH_BASIS is not recognized.')
-        
-        ### Chlorine: If 337 is absent, but 795 is present, use 795
-        if temp_mech.loc[temp_mech['SPECIES_ID'] == 337, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 795 in temp_spec['SPECIES_ID'].values:
-            temp_mech.loc[temp_mech['Species'] == 'PCL', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 795, 'WEIGHT_PERCENT'].iloc[0]
-        else: pass
+            elif ptype == 'PM-CR2':
+                pass  # already mapped in base profile
+                
+            else:
+                sys.exit(f'PROFILE_TYPE = {ptype} for profile {prof} is not recognized.')
 
-        ### Calcium: If 2303 is absent, but 329 is present, use 329  
-        if AQM=='CMAQ':
-            if temp_mech.loc[temp_mech['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 329 in temp_spec['SPECIES_ID'].values:
-                temp_mech.loc[temp_mech['Species'] == 'PCA', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0]
-            else: pass
-        else: pass
-		
-        ### Magnesium: If 2772 is absent, but 525 is present, use 525
-        if AQM=='CMAQ':
-            if temp_mech.loc[temp_mech['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 525 in temp_spec['SPECIES_ID'].values:
-                temp_mech.loc[temp_mech['Species'] == 'PMG', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0]
-            else: pass
-        else: pass
-		
-        ### Potassium: If 2302 is absent, but 669 is present, use 669
-        if AQM=='CMAQ':
-            if temp_mech.loc[temp_mech['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 669 in temp_spec['SPECIES_ID'].values:
-                temp_mech.loc[temp_mech['Species'] == 'PK', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0]
-            else: pass
-        else: pass
-		
-        ### Sodium: If 785 is absent, but 696 is present, use 696
-        if AQM=='CMAQ':
-            if temp_mech.loc[temp_mech['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 696 in temp_spec['SPECIES_ID'].values:
-                temp_mech.loc[temp_mech['Species'] == 'PNA', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0]
-            else: pass
+        elif MECH_BASIS == 'PM-GC':
+            # OC/PNCOM mapping uses OM/OC/NCOM in poa_mapping
+            oc_w   = float(poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'OC',   'WEIGHT_PERCENT'].sum())
+            pncom_w = float(poa_mech.loc[poa_mech['OM/OC/NCOM'] == 'NCOM', 'WEIGHT_PERCENT'].sum())
+            if ptype in ('PM-AE6', 'PM', 'PM-AE8'):
+                set_weight(temp_mech, 'OC', oc_w, by='Species')
+                set_weight(temp_mech, 'PNCOM', pncom_w, by='Species')
+            elif ptype in ('PM-CR1', 'PM-CR2'):
+                if poa_total > 0.0:
+                    ratio = float(p['ORGANIC_MATTER_to_ORGANIC_CARBON_RATIO'])
+                    set_weight(temp_mech, 'OC',    poa_total * (1.0 / ratio), by='Species')
+                    set_weight(temp_mech, 'PNCOM', poa_total * (1.0 - 1.0 / ratio), by='Species')
+            else:
+                sys.exit(f'PROFILE_TYPE = {ptype} for profile {prof} is not recognized.')
+
+        else:
+            sys.exit('MECH_BASIS is not recognized.')
+
+        # Ion substitutions
+        # Chlorine: If 337 absent but 795 present, use 795 -> PCL
+        if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 337, 'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 795 in temp_spec['SPECIES_ID'].values:
+            set_weight(temp_mech, 'PCL', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 795, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
+
+        if is_cmaq:
+            # Calcium: 2303 absent, but 329 present -> PCA
+            if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 2303, 'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 329 in temp_spec['SPECIES_ID'].values:
+                set_weight(temp_mech, 'PCA', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 329, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
+            # Magnesium: 2772 absent, 525 present -> PMG
+            if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 2772, 'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 525 in temp_spec['SPECIES_ID'].values:
+                set_weight(temp_mech, 'PMG', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 525, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
+            # Potassium: 2302 absent, 669 present -> PK
+            if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 2302, 'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 669 in temp_spec['SPECIES_ID'].values:
+                set_weight(temp_mech, 'PK', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 669, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
+            # Sodium: 785 absent, 696 present -> PNA
+            if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 785,  'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 696 in temp_spec['SPECIES_ID'].values:
+                set_weight(temp_mech, 'PNA', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
         else: # if AQM=='CAMX'
             temp_mech.loc[temp_mech['SPECIES_ID'] == 785., 'Species'] = 'NA'
-            if temp_mech.loc[temp_mech['SPECIES_ID'] == 785, 'WEIGHT_PERCENT'].iloc[0] == 0.0 and 696 in temp_spec['SPECIES_ID'].values:
-                temp_mech.loc[temp_mech['Species'] == 'NA', 'WEIGHT_PERCENT'] = temp_spec.loc[temp_spec['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0]
-            else: pass
-        
-        ### Calculate PMOTHR or FPRM/FCRS for CMAQ and CAMX, respectively
-        if temp_mech['WEIGHT_PERCENT'].sum() < 1.0:
-            if AQM=='CMAQ':
-                if TOX_IN=='TOM':
-                    pass
-                else:
-                    temp_mech.loc[temp_mech['Species'] == 'PMOTHR', 'WEIGHT_PERCENT'] = 1.0 - temp_mech['WEIGHT_PERCENT'].sum()
+            if float(temp_mech.loc[temp_mech['SPECIES_ID'] == 785,  'WEIGHT_PERCENT'].iloc[0]) == 0.0 and 696 in temp_spec['SPECIES_ID'].values:
+                set_weight(temp_mech, 'NA', float(temp_spec.loc[temp_spec['SPECIES_ID'] == 696, 'WEIGHT_PERCENT'].iloc[0]), by='Species')
+
+        # Calculate PMOTHR or FPRM/FCRS for CMAQ and CAMX, respectively
+        total_w = float(temp_mech['WEIGHT_PERCENT'].sum())
+        if total_w < 1.0:
+            if is_cmaq:
+                if TOX_IN != 'TOM':
+                    set_weight(temp_mech, 'PMOTHR', 1.0 - total_w, by='Species')
             else: # if AQM=='CAMX'
-                if TOX_IN=='TOM':
-                    pass
-                else:
-                    temp_fcrs = camx_fcrs.loc[:,'PROFILE_CODE'] # pull integrated SPECIES_ID list
-                    temp_fcrs = camx_fcrs.loc[camx_fcrs['PROFILE_CODE'].astype(str) == prof] # pull prof from camx_fcrs, if available
-                    if temp_fcrs.empty:
-                        temp_mech.loc[temp_mech['Species'] == 'FPRM', 'WEIGHT_PERCENT'] = 1.0 - temp_mech['WEIGHT_PERCENT'].sum()
-                    else:
-                        temp_mech.loc[temp_mech['Species'] == 'FCRS', 'WEIGHT_PERCENT'] = 1.0 - temp_mech['WEIGHT_PERCENT'].sum()
-        else: pass
+                if TOX_IN != 'TOM':
+                    # CAMx: FCRS vs FPRM
+                    temp_fcrs = camx_fcrs.loc[camx_fcrs['PROFILE_CODE'].astype(str) == str(prof)]
+                    species_name = 'FCRS' if not temp_fcrs.empty else 'FPRM'
+                    set_weight(temp_mech, species_name, 1.0 - total_w, by='Species')
 
-        # Remove added species, if necessary, and renormalize if RUN_TYPE=='INTEGRATE'
-        if RUN_TYPE=='INTEGRATE':
-            TOXLIST   = tbl_tox.loc[:,'SPECIES_ID'] # pull integrated SPECIES_ID list
-            temp_mech = temp_mech.loc[~temp_mech['SPECIES_ID'].isin(TOXLIST)] # remove TOXLIST species that might have been added
-            temp_mech.loc[:,'WEIGHT_PERCENT'] = temp_mech.loc[:,'WEIGHT_PERCENT'] / temp_mech.loc[:,'WEIGHT_PERCENT'].sum()  # Renormalize Wght%
-        else: # if RUN_TYPE=='CRITERIA':
-            pass
+        # INTEGRATE: remove toxics that might have been added and renormalize
+        if RUN_TYPE == 'INTEGRATE':
+            # remove TOXLIST species that might have been added
+            temp_mech = temp_mech.loc[~temp_mech['SPECIES_ID'].isin(TOXLIST)]
+            sum_w = float(temp_mech['WEIGHT_PERCENT'].sum())
+            if sum_w > 0.0: # Renormalize Wght%
+                temp_mech['WEIGHT_PERCENT'] = temp_mech['WEIGHT_PERCENT'] / sum_w
         
-        ### Calculate POA for CAMX and drop PNCOM
-        temp_mech = temp_mech.reset_index(drop=True) # reset index
-        if AQM=='CAMX':
-            poa_row   = {'AQM': AQM, 'Mechanism': temp_mech.loc[0,'Mechanism'], 'SPECIES_ID': 9999, 'Species': 'POA', \
-                         'WEIGHT_PERCENT':temp_mech.loc[temp_mech['Species'] == 'POC', 'WEIGHT_PERCENT'].sum() + \
-                         temp_mech.loc[temp_mech['Species'] == 'PNCOM', 'WEIGHT_PERCENT'].sum()}
-            temp_mech = temp_mech.append(poa_row, ignore_index = True)
-            temp_mech.drop(temp_mech.index[temp_mech['Species'] == 'PNCOM'], inplace=True)
-        else: pass
+        # Calculate POA for CAMX and drop PNCOM
+        temp_mech = temp_mech.reset_index(drop=True)
+        if is_camx:
+            poc = float(temp_mech.loc[temp_mech['Species'] == 'POC', 'WEIGHT_PERCENT'].sum())
+            pncom = float(temp_mech.loc[temp_mech['Species'] == 'PNCOM', 'WEIGHT_PERCENT'].sum())
+            poa_row = pd.Series({'AQM': AQM, 'Mechanism': temp_mech.loc[0, 'Mechanism'],
+                                 'SPECIES_ID': 9999, 'Species': 'POA', 'WEIGHT_PERCENT': poc + pncom})
+            temp_mech = pd.concat([temp_mech, pd.DataFrame([poa_row])], ignore_index=True)
+            temp_mech = temp_mech.loc[temp_mech['Species'] != 'PNCOM']
 
-        temp_mech = temp_mech.groupby('Species').sum().reset_index() # Sum model species with multiple WEIGHT_PERCENT
-        temp_mech = temp_mech.loc[temp_mech['WEIGHT_PERCENT'] > 0.0 ] # Remove species where WEIGHT_PERCENT == 0.0
+        # Sum model species with multiple WEIGHT_PERCENT
+        temp_mech = temp_mech.groupby('Species', as_index=False)['WEIGHT_PERCENT'].sum()
+        # Remove species where WEIGHT_PERCENT == 0.0
+        temp_mech = temp_mech.loc[temp_mech['WEIGHT_PERCENT'] > 0.0]
 
         if temp_mech.empty:
-            print('Profile '+prof+' is empty following pollutant integration and therefore not processed.')
+            print(f'Profile "{prof}" is empty following pollutant integration and therefore not processed.')
             continue
-        
-        temp_mech = temp_mech.rename(columns={'Species': 'MODEL.SPECIES'}) # rename Species column
-        temp_mech = temp_mech.rename(columns={'WEIGHT_PERCENT': 'MASS.FRACTION'}) # rename Species column
-        temp_mech = temp_mech.drop(['SPECIES_ID'],axis=1) # drop SPECIES_ID column
-        temp_mech.loc[:,'MASS.FRACTION1'] = temp_mech.loc[:,'MASS.FRACTION'] # calculate final split factors
-        temp_mech.loc[:,'MOLECULAR.WGHT'] = 1.0
-        temp_mech.loc[:,'PROFILE'] = prof
-        temp_mech.loc[:,'INPUT.POLL'] = i_poll
-        temp_mech = temp_mech[column_names] # reorder columns
-        temp_mech = temp_mech.reset_index(drop=True) # reset index
 
-        dfgspro   = dfgspro.append(temp_mech) # append profile gspro to final gspro
+        # Final formatting to output schema
+        temp_mech = temp_mech.rename(columns={'Species': 'MODEL.SPECIES', 'WEIGHT_PERCENT': 'MASS.FRACTION'})
+        temp_mech['MASS.FRACTION1'] = temp_mech['MASS.FRACTION']
+        temp_mech['MOLECULAR.WGHT'] = 1.0
+        temp_mech['PROFILE'] = prof
+        temp_mech['INPUT.POLL'] = i_poll
+        temp_mech = temp_mech[column_names].reset_index(drop=True)
         
-    dfgspro['MASS.FRACTION']  = dfgspro['MASS.FRACTION'].astype(float).apply(lambda x: '%.6E' % x)
-    dfgspro['MOLECULAR.WGHT'] = dfgspro['MOLECULAR.WGHT'].astype(float).apply(lambda x: '%.6E' % x)
-    dfgspro['MASS.FRACTION1'] = dfgspro['MASS.FRACTION1'].astype(float).apply(lambda x: '%.6E' % x)
+        # append profile gspro to final gspro
+        dfgspro = pd.concat([dfgspro, temp_mech], ignore_index=True)
 
-    ### Output gspro df to file
-    dfgspro.to_csv(PRO_OUT,index=False,header=False)
+    # Format numeric columns
+    if not dfgspro.empty:
+        dfgspro['MASS.FRACTION']  = dfgspro['MASS.FRACTION'].astype(float).map(lambda x: f"{x:.6E}")
+        dfgspro['MOLECULAR.WGHT'] = dfgspro['MOLECULAR.WGHT'].astype(float).map(lambda x: f"{x:.6E}")
+        dfgspro['MASS.FRACTION1'] = dfgspro['MASS.FRACTION1'].astype(float).map(lambda x: f"{x:.6E}")
+
+    dfgspro.to_csv(PRO_OUT, index=False, header=False)
 ####################################################################################################
 
 ####################################################################################################
 def format_and_header(tbl_tox,TOX_IN,MECH_BASIS,RUN_TYPE,AQM,MW_FILE,FCRS_FILE,TOX_FILE,PRO_OUT):
-
-    ################################################################################################
+    """
+    Prepend a header block to the existing GSPRO at PRO_OUT.
+    """
     ### Import gscnv csv file.
     f1_gspro = np.genfromtxt(PRO_OUT,delimiter=',',dtype='str')
-    ################################################################################################
+    ### Add header lines.    
+    header_lines = [
+        f"#S2S_AQM             {AQM}",
+        f"#S2S_CAMX_FCRS       {FCRS_FILE}",
+        f"#S2S_MW              {MW_FILE}",
+        f"#S2S_MECH_BASIS      {MECH_BASIS}",
+        f"#S2S_RUN_TYPE        {RUN_TYPE}",
+        f"#S2S_RUN_DATE        {today}",
+        f"#S2S_TBL_TOX         {'Not Applicable' if RUN_TYPE == 'CRITERIA' else TOX_FILE}"]
+
+    # Add NHAP tox lines only for INTEGRATE
+    if RUN_TYPE == 'INTEGRATE':
+        if 'Inv.Species' not in tbl_tox.columns:
+            raise ValueError("tbl_tox must contain the column 'Inv.Species' to build NHAP header lines.")
+        # Append each tox species as its own line (keeps the original order)
+        # Format: " #NHAP  {TOX_IN:<12} {Inv.Species}"
+        for _, row in tbl_tox.iterrows():
+            species_name = str(row['Inv.Species']).strip()
+            header_lines.append(f" #NHAP  {TOX_IN:<12s} {species_name}")
+
+    # Final header string
+    total_header = "\n".join(header_lines)
     
-    ################################################################################################
-    headerline1   = '#S2S_AQM             '+AQM
-    headerline2   = '#S2S_CAMX_FCRS       '+FCRS_FILE
-    headerline3   = '#S2S_MW              '+MW_FILE
-    headerline4   = '#S2S_MECH_BASIS      '+MECH_BASIS
-    headerline5   = '#S2S_RUN_TYPE        '+RUN_TYPE
-    headerline6   = '#S2S_RUN_DATE        '+str(today)
-    if RUN_TYPE == 'CRITERIA':
-        headerline7   = '#S2S_TBL_TOX         Not Applicable'
-    else: # RUN_TYPE == 'INTEGRATE' or RUN_TYPE == 'NOINTEGRATE':
-        headerline7   = '#S2S_TBL_TOX         '+TOX_FILE
-    headerline    = '\n'.join([headerline1,headerline2,headerline3,headerline4,headerline5,headerline6,headerline7])
-    if RUN_TYPE=='INTEGRATE':
-        temp_tox  = tbl_tox.copy()
-        temp_tox.loc[:,'AQM'] = '#NHAP'
-        temp_tox.loc[:,'SPECIES_ID'] = TOX_IN
-        temp_tox = temp_tox.to_string(header=None,index=False,justify='left')
-        headerline = '\n'.join([headerline,temp_tox])
-    else: pass # if RUN_TYPE=='CRITERIA' or RUN_TYPE=='NOINTEGRATE'
-
-    np.savetxt(PRO_OUT,f1_gspro[:],fmt='%-20s %-20s %-10s %-13s %-13s %-13s',header=headerline,comments='')
-    ################################################################################################
-
+    # Ensure f1_gspro is 2D for savetxt (handles single-row or empty files)
+    if f1_gspro.ndim == 1:
+        if f1_gspro.size == 0:
+            # If file is empty, create an empty array with 6 columns
+            f1_gspro = np.empty((0, 6), dtype=str)
+        else:
+            f1_gspro = f1_gspro.reshape(1, -1)
+            
+    fmt = '%-20s %-20s %-10s %-13s %-13s %-13s'
+    np.savetxt(PRO_OUT, f1_gspro[:], fmt=fmt, header=total_header, comments='')
 ####################################################################################################
